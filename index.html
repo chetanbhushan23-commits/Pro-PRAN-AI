@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Quant AI Engine</title>
+    <!-- Tailwind CSS for Pro Styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Marked.js to convert Gemini Markdown to beautiful HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { background-color: #0d1117; color: #c9d1d9; }
+        .glass-panel { background: rgba(22, 27, 34, 0.8); border: 1px solid #30363d; }
+        /* Markdown Styling */
+        .prose h3 { color: #58a6ff; font-size: 1.25rem; font-weight: bold; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+        .prose p { margin-bottom: 1rem; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem; }
+        .prose li { margin-bottom: 0.25rem; }
+        .prose strong { color: #f0f6fc; }
+        .prose hr { border-color: #30363d; margin: 1.5rem 0; }
+        .prose h1 { font-size: 2rem; font-weight: bold; text-align: center; margin: 2rem 0; }
+        
+        .loader {
+            border: 4px solid #161b22;
+            border-top: 4px solid #58a6ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-6 font-sans">
+
+    <!-- Header -->
+    <div class="w-full max-w-3xl text-center mb-8 mt-10">
+        <h1 class="text-4xl font-extrabold text-white mb-2">⚡ AI Quant Engine</h1>
+        <p class="text-gray-400">Dhan + Groq + Gemini Live Pipeline</p>
+    </div>
+
+    <!-- Search Box -->
+    <div class="w-full max-w-3xl glass-panel p-6 rounded-xl shadow-2xl flex gap-4">
+        <input type="text" id="symbolInput" placeholder="Enter Stock Symbol (e.g., RELIANCE, ZOMATO)" 
+            class="flex-1 bg-gray-900 border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 uppercase font-semibold tracking-wide">
+        <button onclick="analyzeStock()" 
+            class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-bold transition duration-200">
+            Analyze
+        </button>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loadingBox" class="w-full max-w-3xl hidden flex-col items-center mt-12">
+        <div class="loader mb-4"></div>
+        <p class="text-blue-400 font-medium animate-pulse" id="loadingText">Fetching Live Data & AI Sentiment...</p>
+    </div>
+
+    <!-- Result Box -->
+    <div id="resultBox" class="w-full max-w-3xl glass-panel p-8 rounded-xl shadow-2xl mt-8 hidden mb-20">
+        <div id="reportContent" class="prose w-full"></div>
+    </div>
+
+    <script>
+        async function analyzeStock() {
+            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+            if(!symbol) { alert('Bhai, Stock ka naam toh daalo!'); return; }
+
+            // UI Changes
+            document.getElementById('resultBox').classList.add('hidden');
+            document.getElementById('loadingBox').classList.remove('hidden');
+            document.getElementById('loadingText').innerText = `Running Pro-Quant Logic for ${symbol}...`;
+
+            try {
+                // Backend server ko call karna
+                const response = await fetch(`/api/analyze?symbol=${symbol}`);
+                const data = await response.json();
+
+                if(data.success) {
+                    // Marked.js se markdown ko HTML me convert karna
+                    document.getElementById('reportContent').innerHTML = marked.parse(data.report);
+                    document.getElementById('resultBox').classList.remove('hidden');
+                } else {
+                    document.getElementById('reportContent').innerHTML = `<p class="text-red-500 font-bold">Error: ${data.error}</p>`;
+                    document.getElementById('resultBox').classList.remove('hidden');
+                }
+            } catch (error) {
+                alert("Server se connect nahi ho paya. Make sure node server.js chal raha hai.");
+            } finally {
+                document.getElementById('loadingBox').classList.add('hidden');
+            }
+        }
+
+        // Enter press karne par bhi search ho jaye
+        document.getElementById("symbolInput").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") { event.preventDefault(); analyzeStock(); }
+        });
+    </script>
+</body>
+</html>
