@@ -13,7 +13,7 @@ app.use(express.json());
 app.use(express.static(__dirname)); // Yeh aapke HTML ko phone par bhejega
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const geminiModel = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
 function getQuantData(symbol) {
     return new Promise((resolve) => {
