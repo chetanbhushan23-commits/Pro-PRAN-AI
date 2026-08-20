@@ -1,154 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRAN AI AGENT</title>
-    <!-- Tailwind CSS for Pro Styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Marked.js to convert Gemini Markdown to beautiful HTML -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-   <style>
-    body {
-        background-color: #f3f4f6; /* Soft light grey background */
-        color: #1f2937; /* Dark grey text for readability */
-        font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        margin: 0;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    h1 {
-        color: #111827;
-        margin-bottom: 5px;
-    }
-    p.subtitle {
-        color: #6b7280;
-        margin-top: 0;
-        margin-bottom: 30px;
-    }
-    .container {
-        width: 100%;
-        max-width: 800px;
-        background-color: #ffffff; /* White card */
-        padding: 25px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        margin-bottom: 20px;
-    }
-    .input-group {
-        display: flex;
-        gap: 15px;
-    }
-    input {
-        flex: 1;
-        padding: 15px;
-        background-color: #f9fafb;
-        color: #1f2937;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 16px;
-        outline: none;
-        transition: border-color 0.2s;
-    }
-    input:focus {
-        border-color: #3b82f6; /* Blue highlight on focus */
-    }
-    button {
-        padding: 15px 30px;
-        background-color: #2563eb; /* Bright Blue */
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 16px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: background-color 0.2s;
-    }
-    button:hover {
-        background-color: #1d4ed8;
-    }
-    #report {
-        white-space: pre-wrap;
-        line-height: 1.6;
-        font-size: 15px;
-        color: #374151;
-    }
-    .loading {
-        text-align: center;
-        color: #3b82f6;
-        font-weight: bold;
-    }
-    .error {
-        color: #dc2626; /* Red for errors */
-        font-weight: bold;
-    }
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRAN AI AGENT</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+body{background:#f3f4f6;color:#1f2937;font-family:Inter,'Segoe UI',sans-serif;margin:0;padding:20px;display:flex;flex-direction:column;align-items:center}.glass-panel{background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
 </style>
 </head>
 <body class="min-h-screen flex flex-col items-center p-6 font-sans">
-
-    <!-- Header -->
-    <div class="w-full max-w-3xl text-center mb-8 mt-10">
-        <h1 class="text-4xl font-extrabold text-blue-400 mb-2">⚡ PRAN AI AGENT</h1>
-        <p class="text-gray-400">Dhan + Groq + Gemini Live Pipeline</p>
-    </div>
-
-    <!-- Search Box -->
-    <div class="w-full max-w-3xl glass-panel p-6 rounded-xl shadow-2xl flex gap-4">
-        <input type="text" id="symbolInput" placeholder="Enter Stock Symbol (e.g., RELIANCE, ZOMATO)" 
-            class="flex-1 bg-gray-900 border border-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 uppercase font-semibold tracking-wide">
-        <button onclick="analyzeStock()" 
-            class="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-lg font-bold transition duration-200">
-            Analyze
-        </button>
-    </div>
-
-    <!-- Loading State -->
-    <div id="loadingBox" class="w-full max-w-3xl hidden flex-col items-center mt-12">
-        <div class="loader mb-4"></div>
-        <p class="text-blue-400 font-medium animate-pulse" id="loadingText">Fetching Live Data & AI Sentiment...</p>
-    </div>
-
-    <!-- Result Box -->
-    <div id="resultBox" class="w-full max-w-3xl glass-panel p-8 rounded-xl shadow-2xl mt-8 hidden mb-20">
-        <div id="reportContent" class="prose w-full"></div>
-    </div>
-
-    <script>
-        async function analyzeStock() {
-            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
-            if(!symbol) { alert('Bhai, Stock ka naam toh daalo!'); return; }
-
-            // UI Changes
-            document.getElementById('resultBox').classList.add('hidden');
-            document.getElementById('loadingBox').classList.remove('hidden');
-            document.getElementById('loadingText').innerText = `Running Pro-Quant Logic for ${symbol}...`;
-
-            try {
-                // Backend server ko call karna
-                const response = await fetch(`/api/analyze?symbol=${symbol}`);
-                const data = await response.json();
-
-                if(data.success) {
-                    // Marked.js se markdown ko HTML me convert karna
-                    document.getElementById('reportContent').innerHTML = marked.parse(data.report);
-                    document.getElementById('resultBox').classList.remove('hidden');
-                } else {
-                    document.getElementById('reportContent').innerHTML = `<p class="text-red-500 font-bold">Error: ${data.error}</p>`;
-                    document.getElementById('resultBox').classList.remove('hidden');
-                }
-            } catch (error) {
-                alert("Server se connect nahi ho paya. Make sure node server.js chal raha hai.");
-            } finally {
-                document.getElementById('loadingBox').classList.add('hidden');
-            }
-        }
-
-        // Enter press karne par bhi search ho jaye
-        document.getElementById("symbolInput").addEventListener("keypress", function(event) {
-            if (event.key === "Enter") { event.preventDefault(); analyzeStock(); }
-        });
-    </script>
-</body>
-</html>
+<div class="w-full max-w-3xl text-center mb-8 mt-10"><h1 class="text-4xl font-extrabold text-blue-600 mb-2">⚡ PRAN AI AGENT</h1><p class="text-gray-500">Verified Yahoo Finance + Groq News + Gemini Analysis • Dhan OFF</p></div>
+<div class="w-full max-w-3xl glass-panel p-6 flex gap-4">
+<input type="text" id="symbolInput" placeholder="Enter stock symbol (e.g. MCX, HDFCBANK, RELIANCE)" class="flex-1 bg-gray-50 border border-gray-300 text-gray-900 px-4 py-3 rounded-lg focus:outline-none focus:border-blue-500 uppercase font-semibold">
+<button id="analyzeBtn" onclick="analyzeStock()" class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-bold">Analyze</button>
+</div>
+<div id="loadingBox" class="w-full max-w-3xl hidden flex-col items-center mt-12"><p class="text-blue-600 font-medium animate-pulse" id="loadingText">Fetching verified market data...</p></div>
+<div id="resultBox" class="w-full max-w-3xl glass-panel p-8 mt-8 hidden mb-20"><div id="reportContent" class="prose max-w-none w-full"></div></div>
+<script>
+async function analyzeStock(){
+ const input=document.getElementById('symbolInput'); const btn=document.getElementById('analyzeBtn'); const result=document.getElementById('resultBox'); const loading=document.getElementById('loadingBox'); const report=document.getElementById('reportContent');
+ const symbol=input.value.trim().toUpperCase(); if(!symbol){alert('Stock symbol daaliye.');return;}
+ result.classList.add('hidden'); loading.classList.remove('hidden'); btn.disabled=true; btn.classList.add('opacity-50'); document.getElementById('loadingText').textContent=`Running verified quant analysis for ${symbol}...`;
+ try{
+   const response=await fetch(`/api/analyze?symbol=${encodeURIComponent(symbol)}`,{headers:{Accept:'application/json'}});
+   const text=await response.text(); let data; try{data=JSON.parse(text)}catch(e){throw new Error(`Server returned invalid response (${response.status})`)}
+   if(!response.ok || !data.success) throw new Error(data.error || `Server error ${response.status}`);
+   report.innerHTML=marked.parse(data.report||'No report returned.'); result.classList.remove('hidden');
+ }catch(error){
+   report.innerHTML=`<div class="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700"><b>Analysis error:</b> ${escapeHtml(error.message)}<br><small>Check that <code>node server.js</code> is running and then refresh this page.</small></div>`; result.classList.remove('hidden');
+ }finally{loading.classList.add('hidden'); btn.disabled=false; btn.classList.remove('opacity-50')}
+}
+function escapeHtml(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+document.getElementById('symbolInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();analyzeStock()}});
+</script>
+</body></html>
