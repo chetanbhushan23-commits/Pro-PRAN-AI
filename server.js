@@ -4,6 +4,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { execFile } = require("child_process");
+const path = require("path");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { analyzeSentiment } = require("./sentiment.js");
 
@@ -17,10 +18,40 @@ const geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 function runPython(command, args) {
     return new Promise((resolve) => {
-        execFile(command, args, { timeout: 60000, maxBuffer: 5 * 1024 * 1024 }, (error, stdout, stderr) => {
-            resolve({ error, stdout: stdout || "", stderr: stderr || "", command });
-        });
+        execFile(
+            command,
+            args,
+            {
+                cwd: __dirname,
+                timeout: 60000,
+                maxBuffer: 5 * 1024 * 1024,
+                windowsHide: true,
+                env: process.env,
+            },
+            (error, stdout, stderr) => {
+                resolve({ error, stdout: stdout || "", stderr: stderr || "", command });
+            }
+        );
     });
+}
+
+function parsePythonJson(stdout) {
+    const text = String(stdout || "").trim();
+    if (!text) throw new Error("Python returned empty output");
+
+    // Normal case: the pipeline prints exactly one JSON object.
+    try {
+        return JSON.parse(text);
+    } catch (_) {
+        // Be tolerant of harmless startup/warning text before the JSON.
+        const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        for (let i = lines.length - 1; i >= 0; i--) {
+            try {
+                return JSON.parse(lines[i]);
+            } catch (_) {}
+        }
+        throw new Error(`Python output was not valid JSON: ${text.slice(0, 1000)}`);
+    }
 }
 
 async function getQuantData(symbol) {
@@ -31,36 +62,48 @@ async function getQuantData(symbol) {
 
     if (!safeSymbol) return { status: "FAILED", error: "Invalid stock symbol." };
 
-    // Different machines expose Python under different executable names.
-    // Try the normal Windows runtime first, then Python Launcher / python3.
-    const commands = process.platform === "win32"
-        ? ["python", "py", "python3"]
-        : ["python3", "python"];
+    // On Windows, `python` is the same runtime the user can verify with:
+    // python -c "import numpy,pandas,yfinance,dotenv; print('OK')"
+    // PYTHON_EXECUTABLE can override it when a venv/custom Python is required.
+    const configuredPython = process.env.PYTHON_EXECUTABLE;
+    const commands = configuredPython
+        ? [configuredPython]
+        : process.platform === "win32"
+            ? ["python.exe", "py.exe", "python3.exe"]
+            : ["python3", "python"];
 
+    const pipelinePath = path.join(__dirname, "quant-pipeline.py");
     const attempts = [];
+
     for (const command of commands) {
-        const result = await runPython(command, ["quant-pipeline.py", safeSymbol]);
+        const result = await runPython(command, [pipelinePath, safeSymbol]);
         attempts.push({
             command,
             exit_error: result.error ? result.error.message : null,
-            stderr: result.stderr || null,
+            stderr: result.stderr ? result.stderr.slice(0, 2000) : null,
         });
 
         if (!result.error && result.stdout.trim()) {
             try {
-                const parsed = JSON.parse(result.stdout.trim());
+                const parsed = parsePythonJson(result.stdout);
+                console.log(`📊 Quant pipeline SUCCESS via ${command}: ${safeSymbol}`);
                 return parsed;
             } catch (parseError) {
-                attempts.push({ command, parse_error: parseError.message, stdout: result.stdout.slice(0, 2000) });
+                attempts.push({
+                    command,
+                    parse_error: parseError.message,
+                    stdout: result.stdout.slice(0, 2000),
+                });
             }
         }
     }
 
+    console.error("❌ Quant pipeline execution failed:", JSON.stringify(attempts, null, 2));
     return {
         status: "FAILED",
         error: "Validated quant pipeline could not be executed successfully.",
         attempts,
-        hint: "Run 'python quant-pipeline.py SYMBOL' in the same terminal/environment used to start the Node server."
+        hint: "Run 'python quant-pipeline.py SYMBOL' in this project folder. If that works, restart this Node server so it inherits the same environment."
     };
 }
 
