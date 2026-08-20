@@ -103,16 +103,17 @@ function collectSources(quantData, sentimentData) {
     const sources = [];
     if (quantData?.data_source?.url) sources.push({ ...quantData.data_source, type: "market_data" });
     if (quantData?.fundamentals?.source?.url) sources.push({ ...quantData.fundamentals.source, type: "fundamentals" });
-    for (const article of sentimentData?.articles || []) if (article.url) sources.push({ type: "news", provider: article.provider || "News source", publisher: article.source || "Unknown publisher", url: article.url, published_at: article.publishedAt || null, retrieved_at: article.retrievedAt || null, title: article.title || null });
+    for (const article of sentimentData?.articles || []) if (article.url) sources.push({ type: "news", provider: article.provider || "News source", publisher: article.source || "Unknown publisher", source_tier: article.source_tier || "UNKNOWN", relevance: article.relevance || "UNKNOWN", url: article.url, published_at: article.publishedAt || null, retrieved_at: article.retrievedAt || null, title: article.title || null });
     return sources;
 }
 
 function buildFallbackReport(symbol, quantData, verified, score, sentimentData, sources) {
     const i = quantData.technicals.indicators || {}, f = quantData.fundamentals?.values || {};
     const rec = score.technical >= 7 ? "BUY" : score.technical <= 3 ? "SELL" : "WAIT";
-    const newsLines = (sentimentData?.articles || []).slice(0, 12).map((a, n) => `${n + 1}. **${a.title}** — ${a.source} (${a.publishedAt || "date N/A"})\n   ${a.url}`).join("\n");
-    const sourceLines = sources.length ? sources.map((s, n) => `${n + 1}. ${s.provider || s.type}: ${s.url}${s.title ? ` — ${s.title}` : ""}`).join("\n") : "- No verified source URL available";
-    return `# ${symbol} — Verified Quant Research Report\n\n## Data Snapshot\n- Price: ${quantData.technicals.current_price ?? "N/A"}\n- Previous Close: ${quantData.technicals.previous_close ?? "N/A"}\n- Trend: ${quantData.technicals.trend ?? "N/A"}\n- RSI(14): ${i.RSI_14 ?? "N/A"}\n- EMA20 / EMA50 / EMA200: ${i.EMA_20 ?? "N/A"} / ${i.EMA_50 ?? "N/A"} / ${i.EMA_200 ?? "N/A"}\n- MACD Histogram: ${i.MACD_Histogram ?? "N/A"}\n- ATR(14): ${i.ATR_14 ?? "N/A"}\n- Volume Ratio: ${i.Volume_Ratio ?? "N/A"}\n\n## Fundamentals\n- Market Cap: ${f.market_cap ?? "N/A"}\n- PE: ${f.PE_ratio ?? "N/A"}\n- PB: ${f.PB_ratio ?? "N/A"}\n- ROE: ${f.ROE ?? "N/A"}\n- Debt/Equity: ${f.debt_to_equity ?? "N/A"}\n\n## Quant Score\n- Technical: ${score.technical ?? "N/A"}/10\n- Fundamental: ${score.fundamental ?? "N/A"}/10\n- Sentiment: ${score.sentiment ?? "N/A"}/10\n- Market/Sector: N/A\n\n## Verified News — Last 7 Days\n${sentimentData?.summary || "No verified recent news available."}\n\n${newsLines || "No verified articles available."}\n\n## Final Recommendation\n**${rec}** — based only on verified data. This is not a guarantee of future returns.\n\n## Source Traceability\n${sourceLines}`;
+    const trace = sentimentData?.traceability || {};
+    const newsLines = (sentimentData?.articles || []).slice(0, 15).map((a, n) => `${n + 1}. **${a.title}** — ${a.source} | ${a.relevance || "UNKNOWN"} | ${a.publishedAt || "date N/A"}\n   ${a.url}`).join("\n");
+    const sourceLines = sources.length ? sources.map((s, n) => `${n + 1}. ${s.provider || s.type} | ${s.publisher || ""} | ${s.relevance || ""} | ${s.url}${s.title ? ` — ${s.title}` : ""}`).join("\n") : "- No verified source URL available";
+    return `# ${symbol} — Verified Quant Research Report\n\n## Executive Summary\n- Recommendation: **${rec}**\n- Technical state: **${quantData.technicals.trend || "N/A"}**\n- News sentiment: **${sentimentData?.sentiment || "N/A"} (${sentimentData?.score ?? "N/A"}/10)**\n- Research rule: only verified supplied data is used; missing fields remain N/A.\n\n## Data Snapshot\n- Price: ${quantData.technicals.current_price ?? "N/A"}\n- Previous Close: ${quantData.technicals.previous_close ?? "N/A"}\n- Trend: ${quantData.technicals.trend ?? "N/A"}\n- RSI(14): ${i.RSI_14 ?? "N/A"}\n- EMA20 / EMA50 / EMA200: ${i.EMA_20 ?? "N/A"} / ${i.EMA_50 ?? "N/A"} / ${i.EMA_200 ?? "N/A"}\n- MACD Histogram: ${i.MACD_Histogram ?? "N/A"}\n- ATR(14): ${i.ATR_14 ?? "N/A"}\n- Volume Ratio: ${i.Volume_Ratio ?? "N/A"}\n\n## Technical Analysis\n- Verified EMA structure: ${verified.ema_stack}\n- RSI: ${i.RSI_14 ?? "N/A"}\n- MACD Histogram: ${i.MACD_Histogram ?? "N/A"}\n- Volume ratio: ${i.Volume_Ratio ?? "N/A"}\n\n## Fundamentals\n- Market Cap: ${f.market_cap ?? "N/A"}\n- PE: ${f.PE_ratio ?? "N/A"}\n- PB: ${f.PB_ratio ?? "N/A"}\n- ROE: ${f.ROE ?? "N/A"}\n- Debt/Equity: ${f.debt_to_equity ?? "N/A"}\n\n## Verified News & Sentiment — Last 7 Days\n${sentimentData?.summary || "No verified recent news available."}\n- Direct company articles: ${trace.direct_company_articles ?? "N/A"}\n- Market-context articles: ${trace.market_context_articles ?? "N/A"}\n- Tier-1 publisher articles: ${trace.tier1_articles ?? "N/A"}\n- NewsAPI articles: ${trace.newsapi_articles ?? "N/A"}\n- Google News discovery/context articles: ${trace.google_news_articles ?? "N/A"}\n\n${newsLines || "No verified articles available."}\n\n## Risk Factors & Conflicting Signals\n${(sentimentData?.negative_drivers || []).map(x => `- ${x}`).join("\n") || "- No model-generated negative driver available."}\n${(sentimentData?.conflicting_signals || []).map(x => `- Conflict: ${x}`).join("\n") || "- No conflicting signal reported by the news model."}\n\n## Quant Score\n- Technical: ${score.technical ?? "N/A"}/10\n- Fundamental: ${score.fundamental ?? "N/A"}/10\n- Sentiment: ${score.sentiment ?? "N/A"}/10\n- Market/Sector: N/A\n\n## Final Recommendation\n**${rec}** — based only on verified data. This is not a guarantee of future returns.\n\n## Source Traceability\n${sourceLines}`;
 }
 
 app.get("/api/analyze", async (req, res) => {
@@ -131,11 +132,11 @@ app.get("/api/analyze", async (req, res) => {
         const verifiedTechnicalFacts = buildVerifiedTechnicalFacts(quantData);
         const deterministicScore = buildDeterministicScore(quantData, sentimentData);
         const sources = collectSources(quantData, sentimentData);
-        const fullContext = { symbol, quantData, verifiedTechnicalFacts, deterministicScore, sentimentData, sources, traceability: { news_lookback_days: 7, generated_at: new Date().toISOString() } };
+        const fullContext = { symbol, quantData, verifiedTechnicalFacts, deterministicScore, sentimentData, sources, traceability: { news_lookback_days: 7, generated_at: new Date().toISOString(), history_retention_days: 7 } };
         let finalReport;
         if (geminiModel) {
             try {
-                const systemPrompt = `You are an evidence-first Indian Stock Market Quant Analyst. Analyze ONLY the supplied JSON for ${symbol}. Never invent or estimate. null means N/A. Never claim Dhan. Never contradict verifiedTechnicalFacts. Never manufacture 52-week, OI/F&O, FII/DII, sector, support/resistance, targets, market-share, earnings, macro or regulatory claims unless supplied. News claims only from supplied articles. Prefer the newest directly relevant articles. Every important number must be sourced or described as calculated from Yahoo Finance OHLCV. Do not create a complete score when components are unavailable. Produce a deep but readable report with: Executive Summary, Data Snapshot, Technical Analysis, Fundamental Analysis, Verified News & Sentiment (last 7 days with publisher/date/URL), Risk Factors, Quant Score, Final Recommendation, and a numbered Source Traceability section. Use simple Hinglish where useful.\nRAW VERIFIED DATA:\n${JSON.stringify(fullContext, null, 2)}`;
+                const systemPrompt = `You are an evidence-first Indian Stock Market Quant Research Analyst. Analyze ONLY the supplied JSON for ${symbol}. Never invent or estimate. null means N/A. Never claim Dhan. Never contradict verifiedTechnicalFacts. Never manufacture OI/F&O, FII/DII, sector, support/resistance, targets, market-share, earnings, macro or regulatory claims unless supplied. News claims ONLY from supplied articles. Treat DIRECT_COMPANY articles as primary relevance and MARKET_CONTEXT as contextual evidence. Treat TIER_1 publishers as higher-quality than DISCOVERY results, but do not call a discovery article false merely because of its tier. Explicitly separate company-specific news from broader market/sector news. If sources conflict, report the conflict instead of choosing an unsupported side. Every important number must be sourced or clearly described as calculated from the supplied Yahoo Finance OHLCV. Do not create a complete score when components are unavailable. Produce a deep, readable report with: Executive Summary, Data Snapshot, Technical Analysis, Fundamental Analysis, Business/Market Context only when supplied, Verified News & Sentiment (last 7 days with publisher/date/relevance/provider/URL), Positive Drivers, Negative Drivers & Conflicting Signals, Risk Factors, Quant Score, Final Recommendation, and a numbered Source Traceability section. Keep source URLs intact. Use simple Hinglish where useful.\n\nRAW VERIFIED DATA:\n${JSON.stringify(fullContext, null, 2)}`;
                 const result = await geminiModel.generateContent(systemPrompt);
                 finalReport = result.response.text();
             } catch (aiError) {
@@ -147,7 +148,7 @@ app.get("/api/analyze", async (req, res) => {
         }
         const history = saveReport(symbol, { report: finalReport, data: fullContext });
         res.json({ success: true, report: finalReport, data: fullContext, history });
-        console.log(`✅ Source-backed report sent and saved for ${symbol}`);
+        console.log(`✅ Source-backed deep report sent and saved for ${symbol}`);
     } catch (error) {
         console.error("API Error:", error);
         res.status(500).json({ success: false, error: "AI Engine failed to generate report.", detail: error.message });
@@ -161,7 +162,7 @@ app.get("/api/history", (req, res) => {
     catch (error) { return res.status(500).json({ success: false, error: error.message }); }
 });
 
-app.get("/api/health", (req, res) => res.json({ success: true, server: "running", data_engine: "validated-python-yahoo", dhan_dependency: false, news_lookback_days: 7, history_enabled: true }));
+app.get("/api/health", (req, res) => res.json({ success: true, server: "running", data_engine: "validated-python-yahoo", dhan_dependency: false, news_lookback_days: 7, history_enabled: true, research_depth: "step3" }));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
@@ -169,6 +170,7 @@ app.listen(PORT, () => {
     console.log(`🌐 AI TRADING SERVER RUNNING ON PORT ${PORT}`);
     console.log(`📊 Data engine: validated quant-pipeline.py`);
     console.log(`📰 News: NewsAPI + Google News RSS (7-day)`);
+    console.log(`🔎 Research: relevance + source-tier + conflict traceability`);
     console.log(`💾 Report history: 7-day local traceability store`);
     console.log(`🚫 Dhan dependency: OFF`);
     console.log(`======================================\n`);
