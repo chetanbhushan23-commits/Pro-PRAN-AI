@@ -17,7 +17,17 @@ ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 
 def clean_symbol(symbol):
-    return symbol.replace(".NS", "").replace(".BSE", "").upper().strip()
+    """Normalize common NSE/BSE user input to a Yahoo-compatible symbol."""
+    value = str(symbol or "").strip().upper()
+    value = value.replace(".NS", "").replace(".NSE", "")
+    value = value.replace(".BSE", "").replace(".BO", "")
+    # Yahoo/NSE ticker for HDFC Bank is HDFCBANK, not 'HDFC BANK'.
+    value = "".join(value.split())
+    aliases = {
+        "HDFCBANKLTD": "HDFCBANK",
+        "HDFCBANKLIMITED": "HDFCBANK",
+    }
+    return aliases.get(value, value)
 
 
 def source_meta(provider, url=None, retrieved_at=None):
@@ -226,12 +236,14 @@ def run_pipeline(symbol):
             "provider_errors": provider_errors,
             "technicals": technicals,
             "fundamentals": fundamentals,
-            "data_policy": "No Dhan dependency; no estimated values; unavailable values are null",
-        }, allow_nan=False))
+            "data_policy": "No Dhan dependency; no estimated values; unavailable values are null"
+        }, default=str))
     except Exception as exc:
         print(json.dumps({"symbol": clean, "status": "FAILED", "error": str(exc)}))
 
 
 if __name__ == "__main__":
-    stock_symbol = sys.argv[1] if len(sys.argv) > 1 else "MCX"
-    run_pipeline(stock_symbol)
+    if len(sys.argv) < 2:
+        print(json.dumps({"status": "FAILED", "error": "Usage: python quant-pipeline.py SYMBOL"}))
+        sys.exit(1)
+    run_pipeline(sys.argv[1])
