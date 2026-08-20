@@ -5,85 +5,94 @@ const { exec } = require("child_process");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { analyzeSentiment } = require("./sentiment.js");
 
-// Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
-/**
- * 1. Python se Dhan & Yahoo ka Quant Data Lana
- */
 function getQuantData(symbol) {
     return new Promise((resolve) => {
-        exec(`python quant-pipeline.py ${symbol}`, (error, stdout, stderr) => {
-            if (error) {
-                console.error("Python Execution Error:", error.message);
-                return resolve({ status: "FAILED", error: "Python script failed." });
-            }
+        // Symbol is restricted to NSE-style alphanumeric tickers to avoid shell injection.
+        const safeSymbol = String(symbol).replace(/[^A-Za-z0-9._-]/g, "");
+        exec(`python quant-pipeline.py ${safeSymbol}`, { timeout: 60000 }, (error, stdout) => {
+            if (error) return resolve({ status: "FAILED", error: error.message });
             try {
-                // Python ka clean JSON output parse karna
                 resolve(JSON.parse(stdout.trim()));
             } catch (e) {
-                console.error("Failed to parse Python Output:", stdout);
                 resolve({ status: "FAILED", error: "Invalid JSON from Python." });
             }
         });
     });
 }
 
-/**
- * 2. THE MASTER ENGINE - Sab kuch jodna aur Gemini se decision lena
- */
+function formatSources(quantData, sentimentData) {
+    const sources = [];
+    if (quantData?.data_source) sources.push(quantData.data_source);
+    if (quantData?.fundamentals?.source) sources.push(quantData.fundamentals.source);
+    for (const article of sentimentData?.articles || []) {
+        sources.push({
+            provider: article.source,
+            url: article.url,
+            published_at: article.publishedAt,
+            title: article.title,
+        });
+    }
+    return sources;
+}
+
 async function generateFinalReport(symbol) {
     console.log(`\n==============================================`);
     console.log(`🚀 STARTING PRO-QUANT ANALYSIS FOR: ${symbol}`);
     console.log(`==============================================\n`);
 
-    console.log(`⏳ Step 1 & 2: Fetching Dhan Data & Groq News Sentiment (Parallel Execution)...`);
-    
-    // Time bachane ke liye Python Data aur Groq Sentiment ek sath chalayenge!
+    console.log(`⏳ Fetching validated market data + verified news...`);
     const [quantData, sentimentData] = await Promise.all([
         getQuantData(symbol),
-        analyzeSentiment(symbol)
+        analyzeSentiment(symbol),
     ]);
 
     if (!quantData || quantData.status === "FAILED") {
-        console.log(`❌ System Error: Dhan/Yahoo se Data fetch nahi ho paya. Error: ${quantData.error}`);
+        console.log(`❌ No validated market data available.`);
+        console.log(JSON.stringify(quantData, null, 2));
         return;
     }
 
-    console.log(`✅ Data Fetched Successfully!`);
-    console.log(`🧠 Step 3: Feeding Data to Gemini Master AI...\n`);
-
     const fullContext = {
-        symbol: symbol,
+        symbol: symbol.toUpperCase(),
         quant_data: quantData,
-        news_sentiment: sentimentData
+        news_sentiment: sentimentData,
+        sources: formatSources(quantData, sentimentData),
     };
 
-    // GEMINI SYSTEM PROMPT WITH STRICT INSTITUTIONAL LOGIC
     const systemPrompt = `
-    You are an Elite Indian Stock Market Quant Analyst. 
-    Analyze the provided JSON data for the stock '${symbol}'.
-    
-    APPLY THIS STRICT SCORING ENGINE LOGIC (Out of 100%):
-    1. TECHNICAL (35%): Check 'technicals' data (RSI, MACD, EMA_50, Trend). If RSI is >55 and Price > EMA_50, score high.
-    2. FUNDAMENTAL (30%): Check 'fundamentals'. Look at PE_ratio, ROE, debt_to_equity. Lower PE and High ROE score high.
-    3. NEWS/SENTIMENT (15%): Check 'news_sentiment'. Use the score (out of 10) and the summary provided by Groq.
-    4. MARKET/SECTOR & OI (20%): Use your own baseline knowledge of the Indian market condition for this sector to fill this gap.
+You are an evidence-first Indian Stock Market Quant Analyst.
+Analyze ONLY the supplied JSON for ${symbol}.
 
-    OUTPUT FORMAT REQUIREMENTS:
-    Give your final output in a highly professional but simple 'MCX Guide' style. Use Hinglish (Hindi written in English alphabet) mixed with professional financial terms. 
-    Use bullet points and emojis. Do not output raw JSON, write it as a formatted report.
+NON-NEGOTIABLE DATA RULES:
+1. Never invent, estimate, or use your own market knowledge to fill missing data.
+2. If a value is null, missing, stale, or unavailable, write N/A.
+3. Never claim Dhan is a source. Dhan is removed from this pipeline.
+4. Technical indicators are calculated from the supplied validated OHLCV data.
+5. News sentiment may use ONLY the supplied verified articles.
+6. Every important factual number must identify its source or calculation basis.
+7. Do not manufacture OI, FII/DII, sector data, targets, support/resistance, earnings, or news.
+8. A BUY/WAIT/SELL conclusion must clearly state which available data supports it and must mention if important inputs are unavailable.
 
-    Structure:
-    1. 📊 Quant Engine Data: (Mention Current Price, Source, RSI, PE Ratio)
-    2. 📰 Sentiment Engine: (Briefly summarize the Groq sentiment)
-    3. ⚖️ Scoring Breakdown: (Give a rough calculated score out of 100% based on the 35/30/15/20 weightage)
-    4. 🎯 Final AI Decision: Must end with either 🟢 BUY, 🟡 WAIT, or 🔴 SELL in large text with a 1-line bold reason.
+SCORING:
+Technical 35%, Fundamental 30%, News/Sentiment 15%, Market/Sector/OI 20%.
+If Market/Sector/OI data is unavailable, do NOT assign a fabricated score. Mark that component N/A and state that the overall score is incomplete.
+Do not pretend an incomplete score is 100% reliable.
 
-    RAW DATA FOR ANALYSIS:
-    ${JSON.stringify(fullContext)}
-    `;
+OUTPUT IN SIMPLE HINGLISH:
+1. 📊 Data Snapshot — price, trend, RSI, EMA20/50/200, MACD, volume, PE, ROE, debt/equity where available.
+2. 📰 Verified News — publisher, date, headline, sentiment, and source URL for relevant supplied articles.
+3. 📐 Technical View — explain only calculated indicators.
+4. 🧾 Fundamental View — explain only supplied fundamental values.
+5. ⚖️ Score — show component scores and mark unavailable components N/A.
+6. 🎯 Final Decision — 🟢 BUY / 🟡 WAIT / 🔴 SELL only when justified by available evidence; otherwise 🟡 WAIT with an explicit data limitation.
+7. 🔎 SOURCES — list every source URL supplied in the JSON.
+
+RAW VERIFIED DATA:
+${JSON.stringify(fullContext, null, 2)}
+`;
 
     try {
         const result = await geminiModel.generateContent(systemPrompt);
@@ -97,8 +106,9 @@ async function generateFinalReport(symbol) {
     }
 }
 
-// Run the engine from terminal
 if (require.main === module) {
-    const stock = process.argv[2] || "ETERNAL";
+    const stock = process.argv[2] || "MCX";
     generateFinalReport(stock);
 }
+
+module.exports = { generateFinalReport, getQuantData };
