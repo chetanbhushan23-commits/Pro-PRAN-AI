@@ -54,12 +54,16 @@ check("research-quality integration", () => {
 
 check("health endpoint exists", () => {
   const text = fs.readFileSync(path.join(root, "server.js"), "utf8");
-  if (!text.includes('app.get("/api/health"')) throw new Error("health endpoint missing");
+  if (!/app\.get\s*\(\s*["']\/api\/health["']/.test(text)) {
+    throw new Error("health endpoint missing");
+  }
 });
 
 check("analysis endpoint exists", () => {
   const text = fs.readFileSync(path.join(root, "server.js"), "utf8");
-  if (!text.includes('app.get("/api/analyze"')) throw new Error("analysis endpoint missing");
+  if (!/app\.get\s*\(\s*["']\/api\/analyze["']/.test(text)) {
+    throw new Error("analysis endpoint missing");
+  }
 });
 
 check("environment secrets are not committed in source", () => {
