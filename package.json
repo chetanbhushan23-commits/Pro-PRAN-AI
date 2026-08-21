@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node step7-production-check.js"
+    "test": "node step8-production-verification.js"
   },
   "keywords": [],
   "author": "",
