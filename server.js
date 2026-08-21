@@ -21,12 +21,13 @@ app.use(express.static(__dirname));
 
 /* =========================================================
    AI PROVIDERS
-   Keys are read only from runtime environment. Never commit keys.
+   Railway variables are read from process.env at startup.
+   No API key is stored in GitHub.
 ========================================================= */
-const geminiKey = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
-const groqKey = (process.env.GROQ_API_KEY || "").trim();
-const geminiModelName = (process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-const groqModelName = (process.env.GROQ_MODEL || "openai/gpt-oss-20b").trim();
+const geminiKey = String(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+const groqKey = String(process.env.GROQ_API_KEY || "").trim();
+const geminiModelName = String(process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+const groqModelName = String(process.env.GROQ_MODEL || "openai/gpt-oss-20b").trim();
 
 const genAI = geminiKey ? new GoogleGenerativeAI(geminiKey) : null;
 const geminiModel = genAI ? genAI.getGenerativeModel({ model: geminiModelName }) : null;
@@ -34,8 +35,16 @@ const groq = groqKey ? new Groq({ apiKey: groqKey }) : null;
 
 function providerStatus() {
     return {
-        gemini: { configured: Boolean(geminiKey), model: geminiKey ? geminiModelName : null },
-        groq: { configured: Boolean(groqKey), model: groqKey ? groqModelName : null },
+        gemini: {
+            configured: Boolean(geminiKey),
+            model: geminiKey ? geminiModelName : null,
+            source: "runtime environment"
+        },
+        groq: {
+            configured: Boolean(groqKey),
+            model: groqKey ? groqModelName : null,
+            source: "runtime environment"
+        },
         active_provider: geminiModel ? "GEMINI" : groq ? "GROQ" : "NONE"
     };
 }
@@ -91,7 +100,7 @@ async function getQuantData(symbol) {
     const safeSymbol = normalizeInputSymbol(symbol);
     if (!safeSymbol) return { status: "FAILED", error: "Invalid stock symbol." };
 
-    const configuredPython = process.env.PYTHON_EXECUTABLE?.trim();
+    const configuredPython = String(process.env.PYTHON_EXECUTABLE || "").trim();
     const commands = configuredPython
         ? [configuredPython]
         : process.platform === "win32"
@@ -141,7 +150,7 @@ async function getQuantData(symbol) {
 }
 
 /* =========================================================
-   VERIFIED TECHNICAL FACTS + SCORE
+   VERIFIED TECHNICAL FACTS + DETERMINISTIC SCORE
 ========================================================= */
 function buildVerifiedTechnicalFacts(quantData) {
     const t = quantData?.technicals;
@@ -239,11 +248,9 @@ function buildFallbackReport(symbol, quantData, verified, score, sentimentData, 
     const f = quantData?.fundamentals?.values || {};
     const rec = score.technical >= 7 ? "BUY" : score.technical <= 3 ? "SELL" : "WAIT";
     const trace = sentimentData?.traceability || {};
-
     const newsLines = (sentimentData?.articles || []).slice(0, 15)
         .map((a, n) => `${n + 1}. **${a.title || "Untitled"}** — ${a.source || "Unknown"} | ${a.relevance || "UNKNOWN"} | ${a.publishedAt || "date N/A"}\n   ${a.url}`)
         .join("\n");
-
     const sourceLines = sources.length
         ? sources.map((s, n) => `${n + 1}. ${s.provider || s.type} | ${s.publisher || ""} | ${s.relevance || ""} | ${s.url}${s.title ? ` — ${s.title}` : ""}`).join("\n")
         : "- No verified source URL available";
@@ -319,7 +326,7 @@ ${sourceLines}
 
 /* =========================================================
    AI REPORT GENERATION
-   Gemini is primary; Groq is automatic fallback.
+   Gemini is primary. Groq is automatic fallback.
 ========================================================= */
 function buildAIPrompt(symbol, context) {
     return `You are an evidence-first Indian Stock Market Quant Research Analyst.
@@ -337,7 +344,7 @@ async function generateWithGemini(prompt) {
     const result = await geminiModel.generateContent(prompt);
     const text = result?.response?.text?.();
     if (!text) throw new Error("Gemini returned empty content");
-    return text;
+    return text.trim();
 }
 
 async function generateWithGroq(prompt) {
@@ -409,11 +416,7 @@ app.get("/api/analyze", async (req, res) => {
     try {
         const quantData = await getQuantData(symbol);
         if (!quantData || quantData.status !== "SUCCESS") {
-            return res.status(502).json({
-                success: false,
-                error: "Validated market data unavailable. Report generation stopped.",
-                quantData
-            });
+            return res.status(502).json({ success: false, error: "Validated market data unavailable. Report generation stopped.", quantData });
         }
 
         const sentimentData = await getSentiment(symbol);
@@ -439,15 +442,7 @@ app.get("/api/analyze", async (req, res) => {
         };
 
         const aiResult = await generateAIReport(buildAIPrompt(symbol, fullContext));
-        const finalReport = aiResult.text || buildFallbackReport(
-            symbol,
-            quantData,
-            verifiedTechnicalFacts,
-            deterministicScore,
-            sentimentData,
-            sources,
-            researchQuality
-        );
+        const finalReport = aiResult.text || buildFallbackReport(symbol, quantData, verifiedTechnicalFacts, deterministicScore, sentimentData, sources, researchQuality);
 
         fullContext.ai_used = aiResult.provider;
         fullContext.ai_model = aiResult.model;
@@ -455,19 +450,10 @@ app.get("/api/analyze", async (req, res) => {
 
         const history = saveReport(symbol, { report: finalReport, data: fullContext });
 
-        return res.json({
-            success: true,
-            report: finalReport,
-            data: fullContext,
-            history
-        });
+        return res.json({ success: true, report: finalReport, data: fullContext, history });
     } catch (error) {
         console.error("API Error:", error);
-        return res.status(500).json({
-            success: false,
-            error: "AI Engine failed to generate report.",
-            detail: error.message
-        });
+        return res.status(500).json({ success: false, error: "AI Engine failed to generate report.", detail: error.message });
     }
 });
 
@@ -477,17 +463,11 @@ app.get("/api/analyze", async (req, res) => {
 app.get("/api/research-quality", async (req, res) => {
     const symbol = normalizeInputSymbol(req.query.symbol);
     if (!symbol) return res.status(400).json({ success: false, error: "Stock symbol is required." });
-
     try {
         const quantData = await getQuantData(symbol);
-        if (!quantData || quantData.status !== "SUCCESS") {
-            return res.status(502).json({ success: false, error: "Validated market data unavailable.", quantData });
-        }
+        if (!quantData || quantData.status !== "SUCCESS") return res.status(502).json({ success: false, error: "Validated market data unavailable.", quantData });
         const sentimentData = await getSentiment(symbol);
-        return res.json({
-            success: true,
-            researchQuality: buildResearchQuality(symbol, quantData, sentimentData)
-        });
+        return res.json({ success: true, researchQuality: buildResearchQuality(symbol, quantData, sentimentData) });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
     }
@@ -496,7 +476,6 @@ app.get("/api/research-quality", async (req, res) => {
 app.get("/api/history", (req, res) => {
     const symbol = normalizeInputSymbol(req.query.symbol);
     if (!symbol) return res.status(400).json({ success: false, error: "Stock symbol is required." });
-
     try {
         return res.json({ success: true, ...getReports(symbol) });
     } catch (error) {
@@ -505,7 +484,7 @@ app.get("/api/history", (req, res) => {
 });
 
 /* =========================================================
-   HEALTH + AI TEST APIs
+   HEALTH + AI STATUS + AI TEST
 ========================================================= */
 app.get("/api/health", (req, res) => {
     const status = providerStatus();
@@ -528,7 +507,12 @@ app.get("/api/health", (req, res) => {
 });
 
 app.get("/api/ai-status", (req, res) => {
-    return res.json({ success: true, ...providerStatus() });
+    return res.json({
+        success: true,
+        ...providerStatus(),
+        ready_for_ai: Boolean(geminiModel || groq),
+        note: "Keys are read from Railway/runtime environment; they are never stored in GitHub."
+    });
 });
 
 app.get("/api/ai-test", async (req, res) => {
@@ -572,9 +556,7 @@ const server = app.listen(PORT, HOST, () => {
 
 server.on("error", (error) => {
     console.error("❌ Server error:", error.message);
-    if (error.code === "EADDRINUSE") {
-        console.error(`Port ${PORT} is already in use. Stop the old server or set PORT in .env.`);
-    }
+    if (error.code === "EADDRINUSE") console.error(`Port ${PORT} is already in use. Stop the old server or set PORT in .env.`);
 });
 
 process.on("SIGTERM", () => server.close(() => process.exit(0)));
