@@ -5,6 +5,7 @@ const axios = require("axios");
 const Groq = require("groq-sdk");
 
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const NEWS_API_KEY = process.env.NEWS_API_KEY;
 const LOOKBACK_DAYS = 7;
 
@@ -70,7 +71,6 @@ async function fetchNews(symbol) {
     }
 }
 
-// Google News RSS is a broad discovery layer. It supplements NewsAPI with related company/sector stories.
 async function fetchGoogleNews(symbol) {
     try {
         const terms = getSearchTerms(symbol);
@@ -139,7 +139,7 @@ async function analyzeSentiment(symbol) {
         .sort((a, b) => (Date.parse(b.publishedAt || 0) || 0) - (Date.parse(a.publishedAt || 0) || 0))
         .slice(0, 30);
     const traceability = buildNewsTraceability(articles, symbol);
-    const providers = { newsapi: !!NEWS_API_KEY, google_news: true };
+    const providers = { newsapi: !!NEWS_API_KEY, google_news: true, groq: !!groq, groq_model: GROQ_MODEL };
 
     if (!articles.length) {
         return {
@@ -162,12 +162,13 @@ async function analyzeSentiment(symbol) {
     const prompt = `You are an Indian stock-market news sentiment analyst. Analyze ONLY the supplied verified articles for ${symbol}. Do not add outside facts or invent events. Weight DIRECT_COMPANY and TIER_1 sources more heavily than MARKET_CONTEXT or DISCOVERY results. Return ONLY valid JSON: {"sentiment":"Positive"|"Negative"|"Neutral","score":<number 1-10>,"summary":"<one short evidence-based sentence>","positive_drivers":["..."],"negative_drivers":["..."],"conflicting_signals":["..."]}.\n\n${newsText}`;
     try {
         const chatCompletion = await groq.chat.completions.create({
-            messages: [{ role: "user", content: prompt }], model: "openai/gpt-oss-20b", temperature: 0.1,
+            messages: [{ role: "user", content: prompt }],
+            model: GROQ_MODEL,
+            temperature: 0.1,
+            response_format: { type: "json_object" }
         });
         const outputStr = chatCompletion.choices[0]?.message?.content || "{}";
-        const jsonMatch = outputStr.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error("Groq returned invalid JSON");
-        const result = JSON.parse(jsonMatch[0]);
+        const result = JSON.parse(outputStr);
         if (!result.sentiment || typeof result.score !== "number") throw new Error("Incomplete sentiment result");
         return { ...result, articles, source_status: "VERIFIED_ARTICLES", providers, lookback_days: LOOKBACK_DAYS, traceability };
     } catch (error) {
