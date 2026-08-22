@@ -40,7 +40,10 @@ async function analyze(){const s=document.getElementById('symbol').value.trim().
 function formatReportText(text){
       const raw=String(text||'Decision based on verified data.');
       const escaped=esc(raw);
-      return escaped.replace(/https?:\/\/[^\s<]+/g, '<a href="$&" target="_blank" rel="noopener" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">Open Article ↗</a>');
+      return escaped.replace(/https?:\/\/[^\s<]+/g, (url)=>{
+        const clean=url.replace(/[),.;:]+$/,'');
+        return `<a href="${clean}" target="_blank" rel="noopener noreferrer" title="Open source" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">Open Article ↗</a>${url.slice(clean.length)}`;
+      });
     }
     function render(j,s){const d=j.data||{},q=d.quantData||{},t=q.technicals||{},i=t.indicators||{},f=q.fundamentals?.values||{},sc=d.deterministicScore||{};currentNews=(d.sources||[]).filter(x=>x.title&&x.url).sort((a,b)=>(Date.parse(b.published_at||0)||0)-(Date.parse(a.published_at||0)||0));const rec=(j.report||'').match(/\*\*(BUY|SELL|WAIT)[^*]*\*\*/)?.[1]||'WAIT';const cls=rec==='BUY'?'good':rec==='SELL'?'bad':'warn';document.getElementById('app').innerHTML=`
 <section class="section"><div class="card"><div class="label">Executive Summary</div><div class="value">${esc(s)} — ${esc(t.trend||'N/A')}</div><p>${esc(summary(t,f,rec))}</p></div></section>
