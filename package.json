@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "test": "node step8-production-verification.js",
-    "test:step9": "node step9-ai-production-verification.js"
+    "test:step9": "node step9-ai-production-verification.js",
+    "test:step10": "node step10-end-to-end-production-verification.js"
   },
   "keywords": [],
   "author": "",
