@@ -1,0 +1,34 @@
+name: Fix visible raw URLs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  patch-ui:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch report URL rendering
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('public/index.html')
+          s = p.read_text(encoding='utf-8')
+          old = '''function formatReportText(text){\n      const raw=String(text||'Decision based on verified data.');\n      const escaped=esc(raw);\n      return escaped.replace(/https?:\\/\\/[^\\s<]+/g, '<a href="$&" target="_blank" rel="noopener" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">Open Article ↗</a>');\n    }'''
+          new = '''function formatReportText(text){\n      const raw=String(text||'Decision based on verified data.');\n      const escaped=esc(raw);\n      return escaped.replace(/https?:\\/\\/[^\\s<]+/g, (url)=>{\n        const clean=url.replace(/[),.;:]+$/,'');\n        return `<a href="${clean}" target="_blank" rel="noopener noreferrer" title="Open source" style="display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom">Open Article ↗</a>${url.slice(clean.length)}`;\n      });\n    }'''
+          if old not in s:
+              raise SystemExit('Target formatReportText block not found; refusing unsafe edit')
+          p.write_text(s.replace(old,new), encoding='utf-8')
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: robust visible news URL rendering'
+          git push
