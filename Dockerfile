@@ -23,6 +23,7 @@ COPY . .
 ENV NODE_ENV=production
 ENV PYTHON_EXECUTABLE=/opt/venv/bin/python
 
-EXPOSE 3000
+# Railway supplies PORT at runtime; 8080 matches the service's configured target port.
+EXPOSE 8080
 
 CMD ["node", "server.js"]
