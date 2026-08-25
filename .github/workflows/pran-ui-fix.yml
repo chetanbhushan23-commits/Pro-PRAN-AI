@@ -1,0 +1,65 @@
+name: PRAN AI UI Fix
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply PRAN AI UI fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['index.html', 'public/index.html']:
+              p=Path(name)
+              if not p.exists():
+                  continue
+              s=p.read_text(encoding='utf-8')
+              # Light theme: white background + black text.
+              s=s.replace(':root{--bg:#070b12;--panel:#0d131d;--panel2:#111925;--line:#1d2938;--text:#f2f6fb;--muted:#8291a5;--blue:#55a9ff;--green:#36d98b;--red:#ff6578;--amber:#ffc857}', ':root{--bg:#f7f9fc;--panel:#ffffff;--panel2:#ffffff;--line:#d9e1ea;--text:#111827;--muted:#5f6b7a;--blue:#1769e0;--green:#14804a;--red:#c6283d;--amber:#a45b00}')
+              s=s.replace(':root{--bg:#070b12;--panel:#0d131d;--panel2:#111925;--line:#1d2938;--text:#f2f6fb;--muted:#8291a5;--blue:#55a9ff;--green:#36d98b;--red:#ff6578;--amber:#ffc857;--shadow:0 18px 50px rgba(0,0,0,.25)}', ':root{--bg:#f7f9fc;--panel:#ffffff;--panel2:#ffffff;--line:#d9e1ea;--text:#111827;--muted:#5f6b7a;--blue:#1769e0;--green:#14804a;--red:#c6283d;--amber:#a45b00;--shadow:0 8px 24px rgba(15,23,42,.08)}')
+              s=s.replace('body{margin:0;background:radial-gradient(circle at 80% -10%,#142238 0,#070b12 38%);color:var(--text)', 'body{margin:0;background:var(--bg);color:var(--text)')
+              s=s.replace('header{background:#070b12e8', 'header{background:#ffffff')
+              s=s.replace('header{position:sticky;top:0;z-index:10;background:rgba(7,11,18,.88)', 'header{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.94)')
+              s=s.replace('background:var(--panel);border:1px solid var(--line)', 'background:#ffffff;border:1px solid var(--line)')
+              s=s.replace('background:#0b111a', 'background:#f8fafc')
+              s=s.replace('color:#d9e2ec', 'color:#111827')
+              s=s.replace('color:#fff;margin:18px 0 7px', 'color:#111827;margin:18px 0 7px')
+              s=s.replace('color:#fff;margin:18px 0 7px', 'color:#111827;margin:18px 0 7px')
+              # Remove default IDEA and prevent automatic analysis on page load.
+              s=s.replace('<input id="symbol" value="IDEA" placeholder="NSE symbol — INFY, IDEA, RELIANCE">', '<input id="symbol" value="" placeholder="शेयर नाम / NSE Symbol लिखें — जैसे INFY, IDEA, RELIANCE">')
+              s=s.replace('<input id="symbol" value="IDEA" placeholder="NSE symbol — INFY, IDEA, RELIANCE"><button', '<input id="symbol" value="" placeholder="शेयर नाम / NSE Symbol लिखें — जैसे INFY, IDEA, RELIANCE"><button')
+              s=s.replace("analyze();\n</script>", "\n</script>")
+              # Hindi, shorter UI labels.
+              s=s.replace('Research a stock. Understand the decision.', 'शेयर की आसान रिपोर्ट')
+              s=s.replace('AI-powered Indian equity research', 'AI शेयर विश्लेषण')
+              s=s.replace('Technical • Fundamental • News • Market context • Evidence', 'टेक्निकल • फंडामेंटल • न्यूज़ • मार्केट')
+              s=s.replace('Verified Stock Research Terminal', 'Verified Stock Research')
+              s=s.replace('Executive Summary', 'मुख्य निष्कर्ष')
+              s=s.replace('Technical Analysis', 'टेक्निकल')
+              s=s.replace('Fundamental Analysis', 'फंडामेंटल')
+              s=s.replace('AI Research Report', 'AI रिपोर्ट')
+              s=s.replace('Research quality', 'रिपोर्ट गुणवत्ता')
+              s=s.replace('Scorecard', 'स्कोर')
+              s=s.replace('Current Price', 'वर्तमान भाव')
+              s=s.replace('Current Price', 'वर्तमान भाव')
+              s=s.replace('Analysis completed', 'विश्लेषण पूरा')
+              s=s.replace('Ready', 'तैयार')
+              # Keep report compact: show only the first ~2200 chars in the report panel.
+              s=s.replace('renderMarkdown(j.report||\'Decision based on verified data.\')', 'renderMarkdown(String(j.report||\'Decision based on verified data.\').slice(0,2200))')
+              s=s.replace('reportHtml(j.report)', 'reportHtml(String(j.report||\'\').slice(0,2200))')
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html public/index.html
+          git diff --cached --quiet || git commit -m "fix: light theme concise Hindi-friendly report UI"
+          git push
