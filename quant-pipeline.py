@@ -182,14 +182,31 @@ def calculate_technicals(df):
     df["EMA_20"] = close.ewm(span=20, adjust=False).mean()
     df["EMA_50"] = close.ewm(span=50, adjust=False).mean()
     df["EMA_200"] = close.ewm(span=200, adjust=False).mean()
+
+    # RSI(14) — Wilder RMA: seed with the first 14-period SMA, then apply Wilder smoothing.
+    # This matches the standard daily RSI(14) convention used by TradingView/Investing-style indicators.
     delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
-    avg_loss = loss.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
-    rs = avg_gain / avg_loss.replace(0, np.nan)
-    df["RSI_14"] = 100 - (100 / (1 + rs))
-    df.loc[(avg_loss == 0) & (avg_gain > 0), "RSI_14"] = 100
+    gain = delta.clip(lower=0).to_numpy(dtype=float)
+    loss = (-delta.clip(upper=0)).to_numpy(dtype=float)
+    rsi_values = np.full(len(close), np.nan, dtype=float)
+    if len(close) > 14:
+        avg_gain = gain[1:15].mean()
+        avg_loss = loss[1:15].mean()
+        if avg_loss == 0:
+            rsi_values[14] = 100.0 if avg_gain > 0 else 50.0
+        else:
+            rs = avg_gain / avg_loss
+            rsi_values[14] = 100.0 - (100.0 / (1.0 + rs))
+        for i in range(15, len(close)):
+            avg_gain = ((avg_gain * 13.0) + gain[i]) / 14.0
+            avg_loss = ((avg_loss * 13.0) + loss[i]) / 14.0
+            if avg_loss == 0:
+                rsi_values[i] = 100.0 if avg_gain > 0 else 50.0
+            else:
+                rs = avg_gain / avg_loss
+                rsi_values[i] = 100.0 - (100.0 / (1.0 + rs))
+    df["RSI_14"] = rsi_values
+
     ema12 = close.ewm(span=12, adjust=False).mean()
     ema26 = close.ewm(span=26, adjust=False).mean()
     df["MACD"] = ema12 - ema26
