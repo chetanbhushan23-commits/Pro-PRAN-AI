@@ -7,7 +7,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-venv python3-pip ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Isolated Python environment; server.js will find python3 through PATH
+# Isolated Python environment used by the quant pipeline
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -23,7 +23,7 @@ COPY . .
 ENV NODE_ENV=production
 ENV PYTHON_EXECUTABLE=/opt/venv/bin/python
 
-# Railway supplies PORT at runtime; 8080 matches the service's configured target port.
 EXPOSE 8080
 
-CMD ["node", "server.js"]
+# PRAN AI v2 contains the current /api/ask, analysis and AI routes.
+CMD ["node", "server-v2.js"]
