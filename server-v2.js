@@ -12,6 +12,7 @@ const Groq = require("groq-sdk");
 const { analyzeSentiment } = require("./sentiment.js");
 const { saveReport, getReports } = require("./report-history.js");
 const { buildResearchQuality } = require("./research-quality.js");
+const { classifyQuestion, UNIVERSAL_RULES } = require("./universal-question-taxonomy.js");
 
 const app = express();
 app.disable("x-powered-by");
@@ -192,6 +193,7 @@ function makeContext(symbol, q, sentiment, signal, scores, quality) {
 }
 
 function questionPrompt(question, context) {
+  const intents = classifyQuestion(question);
   return `You are PRAN AI, an evidence-first Indian stock research assistant. Answer the user's question directly in the user's language (Hindi/Hinglish/English).
 
 USER QUESTION:
