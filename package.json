@@ -1,15 +1,16 @@
 {
   "name": "api-test",
   "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
+  "description": "PRAN AI — Universal Indian Stock Research Assistant",
+  "main": "server-v2.js",
   "scripts": {
-    "start": "node -r ./production-hardening.js server.js",
+    "start": "node -r ./production-hardening.js server-v2.js",
+    "start:v2": "node -r ./production-hardening.js server-v2.js",
     "test": "node step8-production-verification.js",
     "test:step9": "node step9-ai-production-verification.js",
     "test:step10": "node step10-end-to-end-production-verification.js"
   },
-  "keywords": [],
+  "keywords": ["stock", "nse", "bse", "ai", "research"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
