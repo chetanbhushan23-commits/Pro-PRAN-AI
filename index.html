@@ -1,23 +1,70 @@
 <!doctype html>
-<html lang="en">
+<html lang="hi">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PRAN AI — Research Terminal</title>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRAN AI — Universal Stock Q&A</title>
 <style>
-:root{--bg:#f7f9fc;--panel:#ffffff;--panel2:#ffffff;--line:#d9e1ea;--text:#111827;--muted:#5f6b7a;--blue:#1769e0;--green:#14804a;--red:#c6283d;--amber:#a45b00}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,system-ui,sans-serif}button,input{font:inherit}header{background:#ffffff;border-bottom:1px solid var(--line)}.nav{max-width:1280px;margin:auto;padding:15px 22px;display:flex;justify-content:space-between}.brand{font-weight:800;font-size:18px}.logo{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#55a9ff,#7c5cff);margin-right:10px}.nav small,.hero p,.status,.label{color:var(--muted)}main{max-width:1280px;margin:auto;padding:26px 22px}.hero{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:20px}.eyebrow{color:var(--blue);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}.hero h1{font-size:32px;margin:7px 0}.search{display:flex;gap:10px;max-width:680px}.search input{width:100%;background:#ffffff;border:1px solid var(--line);border-radius:12px;padding:14px;color:var(--text)}button{border:0;border-radius:12px;padding:0 22px;background:var(--blue);font-weight:800;cursor:pointer}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px}.card{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:16px;padding:18px}.summary{display:flex;justify-content:space-between;align-items:center}.big{font-size:25px;font-weight:850;margin:6px 0}.decision{font-size:28px;font-weight:900}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}.metric{padding:14px;border:1px solid var(--line);border-radius:13px;background:#f8fafc}.value{font-size:20px;font-weight:800;margin-top:6px}.section{margin-top:16px}.section h2{font-size:15px}.report{line-height:1.65;color:#111827}.news{display:grid;gap:9px}.newsrow{border:1px solid var(--line);border-radius:12px;padding:12px}.source-link,a{color:#9dccff;text-decoration:none}.side{display:grid;gap:12px;align-content:start}.score{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}.pill{padding:5px 9px;border-radius:999px;background:#172231;color:#b8c7d8;font-size:12px}.error{color:var(--red)}.loading{opacity:.7}@media(max-width:900px){.layout{grid-template-columns:1fr}.hero{display:block}.search{margin-top:18px}}@media(max-width:620px){main{padding:18px 12px}.grid{grid-template-columns:repeat(2,1fr)}.search{flex-direction:column}.search button{height:48px}}
-</style></head>
-<body><header><div class="nav"><div class="brand"><span class="logo">✦</span>PRAN AI</div><small>Verified Stock Research</small></div></header>
-<main><div class="hero"><div><div class="eyebrow">AI शेयर विश्लेषण</div><h1>शेयर की आसान रिपोर्ट</h1><p>टेक्निकल • फंडामेंटल • न्यूज़ • मार्केट</p></div><div class="search"><input id="symbol" value="" placeholder="शेयर नाम / NSE Symbol लिखें — जैसे INFY, IDEA, RELIANCE"><button id="analyzeBtn">Analyze →</button></div></div><div id="status" class="status">तैयार</div><div id="app"></div></main>
-<script>
-const API_BASE='';
-const $=id=>document.getElementById(id);
-function esc(x){return String(x??'N/A').replace(/[&<>\"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#039;'}[m]))}
-function safeUrl(u){try{const x=new URL(String(u));return /^https?:$/.test(x.protocol)?x.href:''}catch{return ''}}
-function money(x){return x==null||Number.isNaN(Number(x))?'N/A':'₹'+Number(x).toLocaleString('en-IN',{maximumFractionDigits:2})}
-function num(x){return x==null||Number.isNaN(Number(x))?'N/A':Number(x).toFixed(2)}
-function metric(a,b){return `<div class="metric"><div class="label">${esc(a)}</div><div class="value">${esc(b)}</div></div>`}
-function reportHtml(text){let s=esc(text||'No research report returned.');s=s.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^### (.+)$/gm,'<h3>$1</h3>').replace(/^## (.+)$/gm,'<h3>$1</h3>').replace(/(^|\n)- (.+)/g,'$1• $2');return s.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}
-async function analyze(){const s=$('symbol').value.trim().toUpperCase();if(!s)return;const btn=$('analyzeBtn');btn.disabled=true;btn.classList.add('loading');$('status').textContent=`Analyzing ${s} — fetching verified data…`;$('app').innerHTML='<div class="card">Loading market data, fundamentals and research evidence…</div>';try{const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),90000);let r;try{r=await fetch(`${API_BASE}/api/analyze?symbol=${encodeURIComponent(s)}`,{method:'GET',headers:{Accept:'application/json'},signal:controller.signal,cache:'no-store'})}finally{clearTimeout(timer)}const text=await r.text();let j;try{j=JSON.parse(text)}catch{throw new Error(`API returned non-JSON response (HTTP ${r.status}). Please check Railway logs.`)}if(!r.ok||j.success===false)throw new Error(j.error||j.message||`Analysis failed (HTTP ${r.status})`);render(j,s);$('status').textContent=`विश्लेषण पूरा • ${new Date().toLocaleString('en-IN')}`}catch(e){const msg=e.name==='AbortError'?'Analysis timed out after 90 seconds.':e.message||'Unable to analyze this stock.';$('status').innerHTML=`<span class="error">${esc(msg)}</span>`;$('app').innerHTML=`<div class="card"><b>Analysis unavailable</b><p>${esc(msg)}</p><p class="label">Try again in a few seconds. If this repeats, check the Railway API logs.</p></div>`}finally{btn.disabled=false;btn.classList.remove('loading')}}
-function render(j,s){const d=j.data||{},q=d.quantData||{},t=q.technicals||{},i=t.indicators||{},f=q.fundamentals?.values||{},sc=d.deterministicScore||{};const news=(d.sources||[]).filter(x=>x.title&&x.url).sort((a,b)=>new Date(a.published_at||0)-new Date(b.published_at||0));const rec=(j.report||'').match(/\*\*(BUY|SELL|WAIT)[^*]*\*\*/)?.[1]||'WAIT';const cls=rec==='BUY'?'good':rec==='SELL'?'bad':'warn';$('app').innerHTML=`<div class="layout"><div><section class="card summary"><div><div class="label">मुख्य निष्कर्ष</div><div class="big">${esc(s)} <span class="pill">${esc(t.trend||'N/A')}</span></div><p>${esc(`${t.trend||'Unknown'} technical setup. Price ${money(t.current_price)}; RSI ${num(i.RSI_14)}. Verified market data is used for the decision.`)}</p></div><div><div class="label">Decision</div><div class="decision ${cls}">${rec}</div></div></section><div class="grid">${metric('वर्तमान भाव',money(t.current_price))}${metric('RSI (14)',num(i.RSI_14))}${metric('P/E',f.PE_ratio)}${metric('ROE',f.ROE)}</div><section class="section"><div class="card"><h2>टेक्निकल</h2><p><b>EMA:</b> Price ${money(t.current_price)} → EMA20 ${num(i.EMA_20)} → EMA50 ${num(i.EMA_50)} → EMA200 ${num(i.EMA_200)}</p><p><b>Momentum:</b> RSI ${num(i.RSI_14)} • MACD Histogram ${num(i.MACD_Histogram)} • Volume Ratio ${num(i.Volume_Ratio)}</p><p><b>Verified setup:</b> ${esc(d.verifiedTechnicalFacts?.hard_rule||'Mixed/verified data only.')}</p></div></section><section class="section"><div class="card"><h2>फंडामेंटल</h2><div class="grid" style="margin-top:0">${metric('Market Cap',f.market_cap?Number(f.market_cap).toLocaleString('en-IN'):'N/A')}${metric('P/E',f.PE_ratio)}${metric('P/B',f.PB_ratio)}${metric('ROE',f.ROE)}</div></div></section><section class="section"><div class="card"><h2>AI रिपोर्ट</h2><div class="report">${reportHtml(String(j.report||'').slice(0,2200))}</div></div></section><section class="section"><div class="card"><h2>📰 News Timeline · Old → Latest</h2><div class="news">${news.length?news.map(n=>{const href=safeUrl(n.url);return `<div class="newsrow"><b>${n.published_at?new Date(n.published_at).toLocaleDateString('en-IN'):'Date N/A'}</b> — ${esc(n.title)}<br>${href?`<a class="source-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(n.provider||n.publisher||'Open Article')} ↗</a>`:''}</div>`}).join(''):'<div class="newsrow">No dated news available.</div>'}</div></div></section></div><aside class="side"><div class="card"><div class="label">स्कोर</div><div class="score"><span>Technical</span><b>${esc(sc.technical)}</b></div><div class="score"><span>Fundamental</span><b>${esc(sc.fundamental)}</b></div><div class="score"><span>Sentiment</span><b>${esc(sc.sentiment)}</b></div><div class="score"><span>Market / Sector</span><b>${esc(sc.market_sector)}</b></div></div><div class="card"><div class="label">रिपोर्ट गुणवत्ता</div><p>Verified evidence first. AI conclusion follows technical, fundamental and news context.</p><span class="pill">Live API data</span></div></aside></div>`}
-$('analyzeBtn').addEventListener('click',analyze);$('symbol').addEventListener('keydown',e=>{if(e.key==='Enter')analyze()});
+:root{--bg:#f6f8fc;--panel:#fff;--line:#dce3ec;--text:#101828;--muted:#667085;--blue:#1769e0;--green:#16824b;--red:#c6283d;--amber:#a45b00}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}.nav{max-width:1250px;margin:auto;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}.brand{font-size:19px;font-weight:900}.brand span{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#1769e0;color:white;margin-right:9px}.tag{color:var(--muted)}
+main{max-width:1250px;margin:auto;padding:28px 20px 60px}.hero{margin-bottom:20px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}h1{font-size:31px;margin:6px 0}.sub{color:var(--muted);margin:0 0 18px}
+.ask{display:grid;grid-template-columns:180px 1fr auto;gap:10px}.ask input{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fff;outline:none}.ask input:focus{border-color:var(--blue)}button{border:0;border-radius:12px;padding:0 20px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer}.secondary{background:#101828}.status{color:var(--muted);margin:12px 0}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:14px}.answer{line-height:1.7;white-space:pre-wrap}.answer h2,.answer h3{margin:16px 0 7px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.metric{border:1px solid var(--line);border-radius:12px;padding:13px;background:#f8fafc}.metric small{color:var(--muted)}.metric b{display:block;font-size:20px;margin-top:5px}.layout{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:14px}.pill{display:inline-block;border-radius:999px;padding:5px 9px;background:#eef2f7;font-size:12px;font-weight:800}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:9px;border-bottom:1px solid var(--line)}th{font-size:11px;color:var(--muted);text-transform:uppercase}.examples{display:flex;gap:8px;flex-wrap:wrap}.example{background:#eef3f9;border:1px solid var(--line);padding:8px 10px;border-radius:9px;cursor:pointer}.muted{color:var(--muted)}
+@media(max-width:850px){.ask{grid-template-columns:1fr}.ask button{height:46px}.layout{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}h1{font-size:25px}}@media(max-width:520px){.grid{grid-template-columns:1fr 1fr}main{padding:20px 12px}}
+</style>
+</head>
+<body>
+<header><div class="nav"><div class="brand"><span>✦</span>PRAN AI</div><div class="tag">Universal Hindi / Hinglish / English Stock Research</div></div></header>
+<main>
+<section class="hero">
+<div class="eyebrow">AI शेयर विश्लेषण</div>
+<h1>PRAN AI से किसी भी तरह का सवाल पूछें</h1>
+<p class="sub">RSI, EMA, Trend, Support/Resistance, Breakout, BUY/SELL/WAIT, Score, Risk-Reward, Swing Setup और उपलब्ध Fundamental/News data पर सवाल पूछें.</p>
+<div class="ask">
+<input id="symbol" placeholder="NSE Symbol (जैसे INFY)">
+<input id="question" placeholder="जैसे: INFY ka RSI kitna hai? Strong Buy kyu diya? Breakout genuine hai?">
+<button id="askBtn">पूछें →</button>
+</div>
+<div class="status" id="status">तैयार</div>
+<div class="examples">
+<span class="example" data-q="Aaj ka trend kya hai?">आज का Trend?</span>
+<span class="example" data-q="RSI kitna hai aur iska matlab kya hai?">RSI?</span>
+<span class="example" data-q="Support aur Resistance kya hai?">Support / Resistance</span>
+<span class="example" data-q="Breakout aaya hai? Genuine hai?">Breakout?</span>
+<span class="example" data-q="Strong Buy kyu diya? Kaunsi conditions pass hui?">Strong Buy क्यों?</span>
+<span class="example" data-q="Swing trading ke liye setup kaisa hai? Entry, SL aur target kya ho sakte hain?">Swing Setup</span>
+<span class="example" data-q="Technical, Fundamental aur Overall Score kitna hai?">Scores</span>
+</div>
+</section>
 
-</script></body></html>
+<div id="app"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const esc=x=>String(x??"N/A").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function money(x){return x==null?"N/A":"₹"+Number(x).toLocaleString("en-IN",{maximumFractionDigits:2})}
+function val(x){return x==null?"N/A":Number(x).toFixed(2)}
+function renderAnswer(t){return esc(t||"Answer unavailable.").replace(/^### (.+)$/gm,"<h3>$1</h3>").replace(/^## (.+)$/gm,"<h3>$1</h3>").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\n/g,"<br>")}
+function setQuestion(q){$("question").value=q;$("question").focus()}
+async function ask(){
+ const question=$("question").value.trim(), symbol=$("symbol").value.trim().toUpperCase();
+ if(!question){$("status").textContent="Question likhiye.";return}
+ $("askBtn").disabled=true;$("status").textContent="Verified market data + news fetch ho raha hai…";
+ $("app").innerHTML='<div class="card muted">PRAN AI data collect aur answer prepare kar raha hai…</div>';
+ try{
+   const url="/api/ask?question="+encodeURIComponent(question)+"&symbol="+encodeURIComponent(symbol);
+   const r=await fetch(url,{cache:"no-store"});const j=await r.json();
+   if(!r.ok||!j.success)throw Error(j.error||"Answer unavailable");
+   render(j);$("status").textContent="Answer ready • "+new Date().toLocaleString("en-IN");
+ }catch(e){$("status").innerHTML='<span class="bad">'+esc(e.message)+'</span>';$("app").innerHTML=""}
+ finally{$("askBtn").disabled=false}
+}
+function render(j){
+ const d=j.data||{},m=d.market_data||{},i=m.indicators||{},sr=m.support_resistance||{},tp=m.trade_plan||{},s=d.signal||{},sc=d.scores||{};
+ const conditions=[...(s.conditions?.buy||[]),...(s.conditions?.sell||[])];
+ $("app").innerHTML='<div class="layout"><div><div class="card answer"><b>'+esc(j.symbol)+' • '+esc(j.provider||"AI")+'</b><hr>'+renderAnswer(j.answer)+'</div><div class="card"><h3>Verified Snapshot</h3><div class="grid">'+metric("Price",money(m.current_price))+metric("Trend",m.trend)+metric("RSI (14)",val(i.RSI_14))+metric("Volume Ratio",val(i.Volume_Ratio))+metric("EMA20",money(i.EMA_20))+metric("EMA50",money(i.EMA_50))+metric("Support",money(sr.support))+metric("Resistance",money(sr.resistance))+'</div></div><div class="card"><h3>Signal Conditions</h3><table><tr><th>Condition</th><th>Result</th></tr>'+conditions.map(c=>'<tr><td>'+esc(c.label)+'</td><td class="'+(c.passed?"good":"bad")+'"><b>'+(c.passed?"PASS":"FAIL")+'</b></td></tr>').join("")+'</table></div></div><aside><div class="card"><h3>Signal</h3><div class="pill">'+esc(s.recommendation||"WAIT")+'</div><p>Buy conditions: <b>'+esc(s.buy_count)+'/5</b><br>Sell conditions: <b>'+esc(s.sell_count)+'/4</b><br>Breakout: <b>'+esc(s.breakout?"YES":"NO")+'</b><br>Genuine: <b>'+esc(s.breakout_genuine)+'</b></p></div><div class="card"><h3>Scores</h3><p>Technical <b>'+esc(sc.technical)+'/10</b></p><p>Fundamental <b>'+esc(sc.fundamental)+'/10</b></p><p>Sentiment <b>'+esc(sc.sentiment)+'/10</b></p><p>Overall <b>'+esc(sc.overall)+'/10</b></p></div><div class="card"><h3>Trade Plan</h3><p>Entry: <b>'+esc(tp.entry_zone?money(tp.entry_zone.low)+" – "+money(tp.entry_zone.high):"N/A")+'</b></p><p>Stop Loss: <b>'+money(tp.stop_loss)+'</b></p><p>Targets: <b>'+esc((tp.targets||[]).map(money).join(" / ")||"N/A")+'</b></p><p>Risk/Reward: <b>'+esc(s.risk_reward||"N/A")+'</b></p><small class="muted">Levels are calculated scenarios, not guaranteed prices.</small></div></aside></div>';
+}
+function metric(a,b){return '<div class="metric"><small>'+a+'</small><b>'+esc(b)+'</b></div>'}
+$("askBtn").onclick=ask;$("question").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
+document.querySelectorAll(".example").forEach(x=>x.onclick=()=>setQuestion(x.dataset.q));
+</script>
+</body></html>
