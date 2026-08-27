@@ -41,4 +41,14 @@ function classifyQuestion(question){
   return matches.sort((a,b)=>b.score-a.score);
 }
 
-module.exports={INTENTS,UNIVERSAL_RULES,classifyQuestion};
+const LAYER_MAP = {
+ BASICS:"1_market_basics", TRADING:"2_price_ohlcv", TECHNICAL:"3_technical", EMA:"4_moving_averages",
+ RSI:"5_rsi", VOLUME:"6_volume", FUNDAMENTAL:"7_fundamentals", RESULTS:"8_quarterly_results",
+ SIGNAL:"11_signal_engine", RISK:"10_risk_trade_plan", OPTIONS:"13_fno", MARKET:"12_market_context",
+ SECTOR:"14_sector_relative_strength", NEWS:"15_news_events_sentiment"
+};
+function routeQuestion(question){
+ const intents=classifyQuestion(question);
+ return {intents, layers:[...new Set(intents.map(x=>LAYER_MAP[x.intent]).filter(Boolean))], universal:true};
+}
+module.exports={INTENTS,UNIVERSAL_RULES,LAYER_MAP,classifyQuestion,routeQuestion};
