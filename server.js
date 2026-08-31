@@ -458,6 +458,29 @@ app.get("/api/analyze", async (req, res) => {
 });
 
 /* =========================================================
+   QUARTERLY RESULTS API
+========================================================= */
+app.get("/api/quarterly", async (req, res) => {
+    const symbol = normalizeInputSymbol(req.query.symbol);
+    if (!symbol) return res.status(400).json({ success:false, error:"Stock symbol is required." });
+    try {
+        const script = path.join(__dirname, "quarterly-results.py");
+        const configuredPython = String(process.env.PYTHON_EXECUTABLE || "").trim();
+        const commands = configuredPython ? [configuredPython] :
+            process.platform === "win32" ? ["python.exe","py.exe","python3.exe"] : ["python3","python"];
+        for (const command of commands) {
+            const result = await runPython(command, [script, symbol]);
+            if (!result.error && result.stdout.trim()) {
+                try { return res.json({ success:true, ...parsePythonJson(result.stdout) }); } catch (_) {}
+            }
+        }
+        return res.status(502).json({ success:false, error:"Quarterly result data unavailable.", symbol });
+    } catch (error) {
+        return res.status(500).json({ success:false, error:error.message });
+    }
+});
+
+/* =========================================================
    RESEARCH QUALITY + HISTORY
 ========================================================= */
 app.get("/api/research-quality", async (req, res) => {
