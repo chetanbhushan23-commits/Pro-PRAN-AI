@@ -330,6 +330,89 @@ app.get("/api/research-quality", async (req, res) => {
   } catch (e) { return res.status(502).json({ success: false, error: e.message }); }
 });
 
+/* =========================================================
+   QUARTERLY RESULTS API
+   Directly registered in server-v2.js because Railway's Dockerfile
+   starts this file directly (no require-hook).
+========================================================= */
+app.get("/api/quarterly", async (req, res) => {
+  const symbol = normalizeSymbol(req.query.symbol);
+  if (!symbol) {
+    return res.status(400).json({ success: false, error: "Stock symbol is required." });
+  }
+
+  const python = String(
+    process.env.PYTHON_EXECUTABLE ||
+    (process.platform === "win32" ? "python.exe" : "python3")
+  ).trim();
+  const script = path.join(__dirname, "quarterly-pipeline.py");
+
+  try {
+    const result = await new Promise(resolve => {
+      execFile(
+        python,
+        [script, symbol],
+        {
+          cwd: __dirname,
+          timeout: Number(process.env.QUARTERLY_TIMEOUT_MS || 90000),
+          maxBuffer: 4 * 1024 * 1024,
+          env: process.env
+        },
+        (error, stdout, stderr) => resolve({
+          error,
+          stdout: String(stdout || ""),
+          stderr: String(stderr || "")
+        })
+      );
+    });
+
+    const raw = result.stdout.trim();
+    let data = null;
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch (_) {
+        const lines = raw.split(/\r?\n/).map(x => x.trim()).filter(Boolean);
+        for (let i = lines.length - 1; i >= 0; i--) {
+          try { data = JSON.parse(lines[i]); break; } catch (_) {}
+        }
+      }
+    }
+
+    if (!data) {
+      return res.status(502).json({
+        success: false,
+        error: "Quarterly pipeline returned invalid JSON.",
+        detail: result.stderr.slice(0, 1500)
+      });
+    }
+
+    if (data.status !== "SUCCESS") {
+      return res.status(502).json({
+        success: false,
+        error: data.error || "Quarterly result data unavailable.",
+        symbol
+      });
+    }
+
+    return res.json({
+      success: true,
+      symbol: data.symbol,
+      period: data.period,
+      quarters: Array.isArray(data.quarters) ? data.quarters : [],
+      source: data.source || null,
+      note: data.note || null
+    });
+  } catch (error) {
+    console.error("Quarterly API error:", error.message);
+    return res.status(502).json({
+      success: false,
+      error: "Quarterly result fetch failed.",
+      detail: error.message
+    });
+  }
+});
+
 app.get("/api/health", (req, res) => res.json({
   success: true, server: "running", engine: "PRAN AI Universal Q&A v1",
   market_data: "validated quant-pipeline.py", news: "sentiment.js",
