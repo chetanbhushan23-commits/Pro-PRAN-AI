@@ -46,17 +46,21 @@ const esc=x=>String(x??"N/A").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":
 function money(x){return x==null?"N/A":"₹"+Number(x).toLocaleString("en-IN",{maximumFractionDigits:2})}
 function val(x){return x==null?"N/A":Number(x).toFixed(2)}
 function renderAnswer(t){return esc(t||"Answer unavailable.").replace(/^### (.+)$/gm,"<h3>$1</h3>").replace(/^## (.+)$/gm,"<h3>$1</h3>").replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/\n/g,"<br>")}
-function setQuestion(q){currentTab="qa";$("summaryTab").classList.remove("active");$("quarterlyTab").classList.remove("active");$("question").value=q;$("question").focus()}
+function setQuestion(q){
+ currentTab="qa";
+ $("question").value=q;
+ $("question").focus();
+}
 let currentTab="summary";
 function setTab(name){
  currentTab=name;
- $("summaryTab").classList.toggle("active",name==="summary");
- $("quarterlyTab").classList.toggle("active",name==="quarterly");
  if(name==="summary"){
    const symbol=$("symbol").value.trim().toUpperCase();
    if(symbol) loadSummary();
    else {$("app").innerHTML='<div class="card muted">NSE Symbol डालें, फिर Total Summary पर click करें।</div>';$("status").textContent="तैयार";}
- } else loadQuarterly();
+ } else if(name==="quarterly"){
+   loadQuarterly();
+ }
 }
 async function loadSummary(){
  const symbol=$("symbol").value.trim().toUpperCase();
@@ -103,7 +107,7 @@ function render(j){
  $("app").innerHTML='<div class="layout"><div><div class="card answer"><b>'+esc(j.symbol)+' • '+esc(j.provider||"AI")+'</b><hr>'+renderAnswer(j.answer)+'</div><div class="card"><h3>Verified Snapshot</h3><div class="grid">'+metric("Price",money(m.current_price))+metric("Trend",m.trend)+metric("RSI (14)",val(i.RSI_14))+metric("Volume Ratio",val(i.Volume_Ratio))+metric("EMA20",money(i.EMA_20))+metric("EMA50",money(i.EMA_50))+metric("Support",money(sr.support))+metric("Resistance",money(sr.resistance))+'</div></div><div class="card"><h3>Signal Conditions</h3><table><tr><th>Condition</th><th>Result</th></tr>'+conditions.map(c=>'<tr><td>'+esc(c.label)+'</td><td class="'+(c.passed?"good":"bad")+'"><b>'+(c.passed?"PASS":"FAIL")+'</b></td></tr>').join("")+'</table></div></div><aside><div class="card"><h3>Signal</h3><div class="pill">'+esc(s.recommendation||"WAIT")+'</div><p>Buy conditions: <b>'+esc(s.buy_count)+'/5</b><br>Sell conditions: <b>'+esc(s.sell_count)+'/4</b><br>Breakout: <b>'+esc(s.breakout?"YES":"NO")+'</b><br>Genuine: <b>'+esc(s.breakout_genuine)+'</b></p></div><div class="card"><h3>Scores</h3><p>Technical <b>'+esc(sc.technical)+'/10</b></p><p>Fundamental <b>'+esc(sc.fundamental)+'/10</b></p><p>Sentiment <b>'+esc(sc.sentiment)+'/10</b></p><p>Overall <b>'+esc(sc.overall)+'/10</b></p></div><div class="card"><h3>Trade Plan</h3><p>Entry: <b>'+esc(tp.entry_zone?money(tp.entry_zone.low)+" – "+money(tp.entry_zone.high):"N/A")+'</b></p><p>Stop Loss: <b>'+money(tp.stop_loss)+'</b></p><p>Targets: <b>'+esc((tp.targets||[]).map(money).join(" / ")||"N/A")+'</b></p><p>Risk/Reward: <b>'+esc(s.risk_reward||"N/A")+'</b></p><small class="muted">Levels are calculated scenarios, not guaranteed prices.</small></div></aside></div>';
 }
 function metric(a,b){return '<div class="metric"><small>'+a+'</small><b>'+esc(b)+'</b></div>'}
-$("askBtn").onclick=ask;$("question").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});$("summaryTab").onclick=()=>setTab("summary");$("quarterlyTab").onclick=()=>setTab("quarterly");
+$("askBtn").onclick=ask;$("question").addEventListener("keydown",e=>{if(e.key==="Enter")ask()});
 document.querySelectorAll(".example").forEach(x=>x.onclick=()=>{const action=x.dataset.action;if(action)setTab(action);else setQuestion(x.dataset.q);});
 </script>
 </body></html>
