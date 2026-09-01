@@ -125,3 +125,72 @@ express.application.post = function productionPost(path, ...handlers) {
 };
 
 console.log(`🛡️ Production hardening enabled: analyze cache TTL=${TTL_MS}ms, max=${MAX_CACHE}`);
+
+
+/*
+ * PRAN AI quarterly-results route.
+ * This route is registered before Express starts listening so the existing
+ * server-v2.js does not need to be modified just to expose quarterly data.
+ */
+const originalListen = express.application.listen;
+express.application.listen = function pranListen(...args) {
+    const app = this;
+    if (!app.__pranQuarterlyRouteInstalled) {
+        app.__pranQuarterlyRouteInstalled = true;
+        app.get("/api/quarterly", (req, res) => {
+            const symbol = String(req.query?.symbol || "").trim().toUpperCase();
+            if (!symbol) {
+                return res.status(400).json({ success: false, error: "Stock symbol is required." });
+            }
+            const python = String(
+                process.env.PYTHON_EXECUTABLE ||
+                (process.platform === "win32" ? "python.exe" : "python3")
+            );
+            const script = require("path").join(__dirname, "quarterly-pipeline.py");
+            require("child_process").execFile(
+                python,
+                [script, symbol],
+                {
+                    cwd: __dirname,
+                    timeout: Number(process.env.QUARTERLY_TIMEOUT_MS || 60000),
+                    maxBuffer: 4 * 1024 * 1024,
+                    env: process.env
+                },
+                (error, stdout, stderr) => {
+                    if (error && !String(stdout || "").trim()) {
+                        return res.status(502).json({
+                            success: false,
+                            error: "Quarterly data fetch failed.",
+                            detail: String(stderr || error.message).slice(0, 1200)
+                        });
+                    }
+                    try {
+                        const data = JSON.parse(String(stdout || "").trim());
+                        if (data.status !== "SUCCESS") {
+                            return res.status(502).json({
+                                success: false,
+                                error: data.error || "Quarterly data unavailable."
+                            });
+                        }
+                        return res.json({
+                            success: true,
+                            symbol: data.symbol,
+                            period: data.period,
+                            quarters: data.quarters || [],
+                            source: data.source || null,
+                            note: data.note || null
+                        });
+                    } catch (parseError) {
+                        return res.status(502).json({
+                            success: false,
+                            error: "Quarterly pipeline returned invalid JSON.",
+                            detail: String(stderr || parseError.message).slice(0, 1200)
+                        });
+                    }
+                }
+            );
+        });
+        console.log("📈 Quarterly Results API enabled: /api/quarterly");
+    }
+    return originalListen.apply(this, args);
+};
