@@ -18,63 +18,36 @@ function renderMarkdown(text){let html=linkify(String(text||'Decision based on v
 let stockUniverse=[];
 let selectedStock=null;
 let searchTimer=null;
-async function loadStockUniverse(){
- try{
-  const r=await fetch('/stock-universe.json?ts='+Date.now(),{cache:'no-store'});
-  const j=await r.json();
-  stockUniverse=Array.isArray(j.stocks)?j.stocks:[];
- }catch(e){stockUniverse=[];}
-}
+let suggestionResults=[];
 function cleanSearch(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'')}
-function levenshtein(a,b){
- const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
- for(let i=0;i<=m;i++)dp[i][0]=i;
- for(let j=0;j<=n;j++)dp[0][j]=j;
- for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
- return dp[m][n];
-}
-function stockMatches(query){
- const q=cleanSearch(query);
- if(!q)return [];
- const scored=stockUniverse.map(s=>{
-   const sym=cleanSearch(s.symbol);
-   let score=999;
-   if(sym===q)score=0;
-   else if(sym.startsWith(q))score=10+sym.length-q.length;
-   else if(sym.includes(q))score=30+sym.indexOf(q);
-   else{
-     const maxDist=q.length<=4?1:q.length<=7?2:3;
-     const d=levenshtein(q,sym.slice(0,Math.max(q.length,sym.length)));
-     if(d<=maxDist)score=60+d*5+Math.abs(sym.length-q.length);
-   }
-   return score<999?{...s,score}:null;
- }).filter(Boolean).sort((a,b)=>a.score-b.score||a.symbol.localeCompare(b.symbol));
- return scored.slice(0,8);
-}
 function showSuggestions(list){
  const box=document.getElementById('suggestions');
- if(!list.length){box.hidden=true;box.innerHTML='';return;}
- box.innerHTML=list.map((s,i)=>`<div class="suggestion" data-symbol="${esc(s.symbol)}" data-index="${i}"><div><div class="suggestion-main">${esc(s.symbol)}</div><div class="suggestion-sub">${esc(s.symbol)} • NSE • Verified universe</div></div><span class="suggestion-badge">Select ↵</span></div>`).join('');
+ suggestionResults=list||[];
+ if(!suggestionResults.length){box.hidden=true;box.innerHTML='';return;}
+ box.innerHTML=suggestionResults.map((s,i)=>`<div class="suggestion" data-index="${i}"><div><div class="suggestion-main">${esc(s.symbol)}</div><div class="suggestion-sub">${esc(s.companyName||'')} • ${esc(s.exchange||'NSE')}</div></div><span class="suggestion-badge">Select</span></div>`).join('');
  box.hidden=false;
  box.querySelectorAll('.suggestion').forEach(el=>el.addEventListener('mousedown',e=>{
-   e.preventDefault();selectStock(el.dataset.symbol);
+   e.preventDefault();selectStock(Number(el.dataset.index));
  }));
 }
-function selectStock(symbol){
- const clean=cleanSearch(symbol);
- const found=stockUniverse.find(s=>cleanSearch(s.symbol)===clean);
+function selectStock(index){
+ const found=suggestionResults[index];
  if(!found)return;
  selectedStock=found;
  document.getElementById('symbol').value=found.symbol;
  document.getElementById('suggestions').hidden=true;
- document.getElementById('status').textContent=`Selected: ${found.symbol} • NSE`;
+ document.getElementById('status').textContent=`Selected: ${found.symbol} • ${found.exchange||'NSE'}`;
 }
 async function searchStockSuggestions(){
- const input=document.getElementById('symbol'), q=input.value;
- selectedStock=null;
- if(cleanSearch(q).length<1){document.getElementById('suggestions').hidden=true;return;}
- if(!stockUniverse.length)await loadStockUniverse();
- showSuggestions(stockMatches(q));
+ const q=document.getElementById('symbol').value.trim();
+ if(!q){document.getElementById('suggestions').hidden=true;return;}
+ try{
+   const r=await fetch('/api/search-stocks?q='+encodeURIComponent(q)+'&ts='+Date.now(),{cache:'no-store'});
+   const j=await r.json();
+   showSuggestions(j.success?j.results:[]);
+ }catch(e){
+   document.getElementById('suggestions').hidden=true;
+ }
 }
 
 let lastAnalysis=null;
@@ -104,12 +77,11 @@ async function analyze(){const s=document.getElementById('symbol').value.trim().
 function render(j,s){const d=j.data||{},q=d.quantData||{},t=q.technicals||{},i=t.indicators||{},f=q.fundamentals?.values||{},sc=d.deterministicScore||{};const news=(d.sources||[]).filter(x=>x.title&&x.url).sort((a,b)=>new Date(a.published_at||0)-new Date(b.published_at||0));const rec=(j.report||'').match(/\*\*(BUY|SELL|WAIT)[^*]*\*\*/)?.[1]||'WAIT';const cls=rec==='BUY'?'good':rec==='SELL'?'bad':'warn';document.getElementById('app').innerHTML=`<div class="layout"><div><section class="card summary"><div><div class="label">मुख्य निष्कर्ष</div><div class="big">${esc(s)} <span class="pill">${esc(t.trend||'N/A')}</span></div><p>${esc(summary(t,f,rec))}</p></div><div><div class="label">Decision</div><div class="decision ${cls}">${rec}</div></div></section><section class="section"><div class="grid">${metric('वर्तमान भाव',money(t.current_price))}${metric('RSI (14)',i.RSI_14)}${metric('P/E',f.PE_ratio)}${metric('ROE',f.ROE)}</div></section><section class="section"><div class="card"><h2>टेक्निकल</h2><p><b>EMA Stack:</b> Price ${money(t.current_price)} → EMA20 ${num(i.EMA_20)} → EMA50 ${num(i.EMA_50)} → EMA200 ${num(i.EMA_200)}</p><p><b>Momentum:</b> RSI ${num(i.RSI_14)} • MACD Histogram ${num(i.MACD_Histogram)} • Volume Ratio ${num(i.Volume_Ratio)}</p><p><b>Verified setup:</b> ${esc(d.verifiedTechnicalFacts?.hard_rule||'Mixed/verified data only.')}</p></div></section><section class="section"><div class="card"><h2>फंडामेंटल</h2><div class="grid">${metric('Market Cap',f.market_cap?Number(f.market_cap).toLocaleString('en-IN'):'N/A')}${metric('P/E',f.PE_ratio)}${metric('P/B',f.PB_ratio)}${metric('ROE',f.ROE)}</div></div></section><section class="section"><div class="card"><h2>AI रिपोर्ट</h2><div class="report">${renderMarkdown(String(j.report||'Decision based on verified data.').slice(0,2200))}</div></div></section><section class="section"><div class="card"><h2>📰 News Timeline · Old → Latest</h2><div class="news">${news.length?news.map(n=>`<div class="newsrow"><b>${n.published_at?new Date(n.published_at).toLocaleDateString('en-IN'):'Date N/A'}</b> — ${esc(n.title)}<br><a href="${esc(safeUrl(n.url))}" target="_blank" rel="noopener noreferrer" class="source-link">${esc(n.provider||n.publisher||'Open Article')} ↗</a></div>`).join(''):'<div class="newsrow">No dated news available.</div>'}</div></div></section></div><aside class="side"><div class="card"><div class="label">स्कोर</div><div class="score"><span>Technical</span><b>${esc(sc.technical)}</b></div><div class="score"><span>Fundamental</span><b>${esc(sc.fundamental)}</b></div><div class="score"><span>Sentiment</span><b>${esc(sc.sentiment)}</b></div><div class="score"><span>Market / Sector</span><b>${esc(sc.market_sector)}</b></div></div><div class="card"><div class="label">रिपोर्ट गुणवत्ता</div><p>Verified evidence first. AI conclusion is shown after technical, fundamental and news context.</p><span class="pill">Live API data</span></div><div class="card"><div class="label">Sources</div>${(d.sources||[]).map(x=>{const href=safeUrl(x.url);return href?`<div style="margin-top:9px">• <a class="source-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(x.provider||x.publisher||'Source')} ↗</a></div>`:''}).join('')}</div></aside></div>`}
 function metric(a,b){return `<div class="metric"><div class="label">${a}</div><div class="value">${esc(b)}</div></div>`}function money(x){return x==null?'N/A':'₹'+Number(x).toLocaleString('en-IN',{maximumFractionDigits:2})}function num(x){return x==null?'N/A':Number(x).toFixed(2)}function summary(t,f,r){return `${t.trend||'Unknown'} technical setup. Price ${money(t.current_price)}; RSI ${num(t.indicators?.RSI_14)}. Fundamental data should be judged with available verified fields only. Current deterministic decision: ${r}.`}
 const symbolInput=document.getElementById('symbol');
-symbolInput.addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(searchStockSuggestions,60);});
+symbolInput.addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(searchStockSuggestions,120);});
 symbolInput.addEventListener('focus',()=>{if(symbolInput.value.trim())searchStockSuggestions()});
 symbolInput.addEventListener('keydown',e=>{
  if(e.key==='Enter'){
-   const first=document.querySelector('#suggestions .suggestion');
-   if(!selectedStock && first){e.preventDefault();selectStock(first.dataset.symbol);return;}
+   if(suggestionResults.length && !selectedStock){e.preventDefault();selectStock(0);return;}
    analyze();
  }
  if(e.key==='Escape')document.getElementById('suggestions').hidden=true;
@@ -117,6 +89,5 @@ symbolInput.addEventListener('keydown',e=>{
 document.addEventListener('click',e=>{
  const wrap=document.querySelector('.stock-search');
  if(wrap && !wrap.contains(e.target))document.getElementById('suggestions').hidden=true;
-});
-loadStockUniverse();document.getElementById('summaryTab').onclick=()=>activateTab('summary');document.getElementById('quarterlyTab').onclick=()=>activateTab('quarterly');
+});document.getElementById('summaryTab').onclick=()=>activateTab('summary');document.getElementById('quarterlyTab').onclick=()=>activateTab('quarterly');
 </script></body></html>
