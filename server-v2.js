@@ -269,44 +269,42 @@ app.get("/api/search-stocks", async (req, res) => {
   const query = String(req.query.q || "").trim();
   if (!query) return res.json({ success: true, query: "", results: [] });
   const clean = query.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  let universe = [];
+  const results = [];
+  const seen = new Set();
+  const add = (x, score) => {
+    const raw = String(x.symbol || "").toUpperCase();
+    if (!raw) return;
+    const symbol = raw.replace(/\\.(NS|BO)$/i, "");
+    if (!symbol || seen.has(symbol)) return;
+    seen.add(symbol);
+    results.push({
+      symbol,
+      companyName: x.longname || x.shortname || x.name || symbol,
+      exchange: /\\.BO$/i.test(raw) ? "BSE" : (x.exchange === "NSI" || x.quoteType === "EQUITY" ? "NSE" : (x.exchange || "NSE")),
+      score
+    });
+  };
+  const scoreSymbol = (sym) => {
+    const s=String(sym||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(s===clean)return 0;
+    if(s.startsWith(clean))return 10+s.length-clean.length;
+    if(s.includes(clean))return 25+s.indexOf(clean);
+    const d=Math.abs(s.length-clean.length);
+    return d<=2 ? 50+d : 999;
+  };
   try {
-    universe = require("./stock-universe.json").stocks || [];
-  } catch (_) {}
-  function distance(a,b){
-    const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
-    for(let i=0;i<=m;i++)dp[i][0]=i;
-    for(let j=0;j<=n;j++)dp[0][j]=j;
-    for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
-    return dp[m][n];
-  }
-  const local = universe.map(s => {
-    const sym=String(s.symbol||"").toUpperCase();
-    let score=999;
-    if(sym===clean)score=0;
-    else if(sym.startsWith(clean))score=10+sym.length-clean.length;
-    else if(sym.includes(clean))score=30+sym.indexOf(clean);
-    else {
-      const max=clean.length<=4?1:clean.length<=7?2:3;
-      const d=distance(clean,sym.slice(0,Math.max(clean.length,sym.length)));
-      if(d<=max)score=60+d*5+Math.abs(sym.length-clean.length);
-    }
-    return score<999?{symbol:sym,exchange:s.exchange||"NSE",score}:null;
-  }).filter(Boolean);
-  try {
-    const r=await fetch("https://query1.finance.yahoo.com/v1/finance/search?q="+encodeURIComponent(query)+"&quotesCount=10&newsCount=0");
+    const r=await fetch("https://query1.finance.yahoo.com/v1/finance/search?q="+encodeURIComponent(query)+"&quotesCount=20&newsCount=0");
     if(r.ok){
       const j=await r.json();
       for(const x of (j?.quotes||[])){
-        const sym=String(x.symbol||"").replace(/\.NS$/i,"").toUpperCase();
-        if(!sym || !universe.some(s=>String(s.symbol).toUpperCase()===sym))continue;
-        const row=local.find(v=>v.symbol===sym);
-        if(row){row.companyName=x.longname||x.shortname||row.companyName;row.score=Math.min(row.score,5);}
+        const raw=String(x.symbol||"").toUpperCase();
+        if(!raw.endsWith(".NS") && !raw.endsWith(".BO")) continue;
+        add(x, scoreSymbol(raw));
       }
     }
-  }catch(_){}
-  const results=local.sort((a,b)=>a.score-b.score||a.symbol.localeCompare(b.symbol)).slice(0,10);
-  return res.json({success:true,query,results});
+  } catch (_) {}
+  results.sort((a,b)=>a.score-b.score||a.symbol.localeCompare(b.symbol));
+  return res.json({ success:true, query, results:results.slice(0,10) });
 });
 
 app.get("/api/ask", async (req, res) => {
